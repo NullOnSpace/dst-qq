@@ -95,7 +95,7 @@ def update_server():
         "+login anonymous", "+app_update", "343050", "validate", "+quit"),
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf8"
     )
-    print("udpate start")
+    print("update start")
     os.chdir(CWD)
     phase = 0
     while True:
