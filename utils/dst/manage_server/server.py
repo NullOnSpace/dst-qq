@@ -95,7 +95,7 @@ def update_server():
         "+login anonymous", "+app_update", "343050", "validate", "+quit"),
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf8"
     )
-    print("udpate start")
+    print("update start")
     os.chdir(CWD)
     phase = 0
     while True:
@@ -118,7 +118,7 @@ def update_server():
             elif "Success!" in line and phase <= 5:
                 R.set(REDIS_UPDATE_STATE, "done")
                 return
-            elif "ERROR" in line:
+            elif "ERROR" in line and "ignore" not in line:
                 print("start ERROR:", line)
                 R.set(REDIS_UPDATE_STATE, "ERROR")
                 return
