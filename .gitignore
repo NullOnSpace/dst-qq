@@ -167,3 +167,4 @@ server.ini
 cq-http/*
 !cq-http/go-cphttp
 *.txt
+utils/dst/manage_server/mulpro_imp.py

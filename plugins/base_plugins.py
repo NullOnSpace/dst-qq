@@ -4,6 +4,7 @@ import aioredis
 import asyncio
 
 from utils.dst.get_server_list_aio import get_server, get_server_detail
+from . import customize_strings as cs
 
 
 HOST = "KU_3RvV9haR"
@@ -54,6 +55,15 @@ REDIS_CHANNEL = "dst:channel:server"
 REDIS_SERVER_STATE = "dst:state:server"
 REDIS_UPDATE_STATE = "dst:update:server"
 
+STATE_DICT = {
+    "idle": "空闲",
+    "starting": "正在启动",
+    "stopping": "正在关闭",
+    "running": "运行中",
+    "ERROR": "服务器错误",
+    "setup timeout": "启动超时",
+}
+
 @on_command('start', aliases=('启动',),
     permission=perm.SUPERUSER, only_to_me=TEST)
 async def start(session):
@@ -61,17 +71,24 @@ async def start(session):
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     await r.publish(REDIS_CHANNEL, 'start')
     last_state = ""
+    starting_strings = []
     while True:
         state = await r.get(REDIS_SERVER_STATE)
-        if state in ('1/4', '2/4', '3/4', 'idle', 'starting'):
-            if last_state != state:
-                print(last_state, state)
-                last_state = state
-                await session.send(state)
-        else:
-            await session.send(state)
-            await r.close()
-            return
+        if last_state != state:
+            print(last_state, state)
+            last_state = state
+            if "/" in state:
+                order, total = state.split("/")
+                if not starting_strings:
+                    starting_strings = cs.give_some_startings(int(total))
+                s = starting_strings[int(order)-1]
+                await session.send(f"{s}...{state}")
+            elif state in ('idle', 'starting'):
+                await session.send(STATE_DICT[state])
+            else:
+                await session.send(STATE_DICT[state])
+                await r.close()
+                return
         await asyncio.sleep(0.2)
 
 @on_command('stop', aliases=('关机',),
@@ -80,7 +97,12 @@ async def stop(session):
     print("stop")
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     await r.publish(REDIS_CHANNEL, 'stop')
-    await session.send("closed")
+    await session.send("正在关机")
+    while True:
+        server_status = await r.get(REDIS_SERVER_STATE)
+        if server_status != "stopping":
+            break
+    await session.send("已关闭")
     await r.close()
 
 @on_command('update', aliases=('更新',),
