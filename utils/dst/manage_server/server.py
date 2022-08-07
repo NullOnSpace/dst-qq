@@ -118,7 +118,7 @@ def update_server():
             elif "Success!" in line and phase <= 5:
                 R.set(REDIS_UPDATE_STATE, "done")
                 return
-            elif "ERROR" in line:
+            elif "ERROR" in line and "ignore" not in line:
                 print("start ERROR:", line)
                 R.set(REDIS_UPDATE_STATE, "ERROR")
                 return
