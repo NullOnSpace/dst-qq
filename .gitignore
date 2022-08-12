@@ -168,3 +168,4 @@ cq-http/*
 !cq-http/go-cphttp
 *.txt
 utils/dst/manage_server/mulpro_imp.py
+mp_out.py

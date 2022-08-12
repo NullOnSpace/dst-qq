@@ -34,6 +34,7 @@ def _mp_server():
     """start server in multiprocess
     and also handle stopping it
     """
+    fd = open("/home/hikaru/qqbot/utils/dst/manage_server/log.txt", 'w')
     MR = redis.Redis(decode_responses=True)
     print("starting multiprocess for start server")
     COMMAND_ROOT = os.path.join(INSTALL_DIR, "bin64")
@@ -41,47 +42,48 @@ def _mp_server():
     os.chdir(COMMAND_ROOT)
     command_line = [cmd, "-cluster", CLUSTER_NAME, "-shard", "Master"]
     master_p = subprocess.Popen(command_line,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf8")
+        stdout=fd, stderr=subprocess.STDOUT, encoding="utf8")
     command_line[-1] = "Caves"
     cave_p = subprocess.Popen(command_line,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf8")
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, encoding="utf8")
     print("server subprocess start")
     t_start = time.time()
     timeout = 120
     stop_it_now = False
     phase = 0
     start_over = False
-    while True:
-        if start_over:
-            break
-        for line in master_p.stdout:
-            if "Starting Up" in line and phase == 0:
-                phase = 1
-                MR.set(REDIS_SERVER_STATE, "1/4")
-            elif "Running main.lua" in line and phase == 1:
-                phase = 2
-                MR.set(REDIS_SERVER_STATE, "2/4")
-            elif "Account Communication Success" in line and phase == 2:
-                phase = 3
-                MR.set(REDIS_SERVER_STATE, "3/4")
-            elif ("(active)" in line or "(disabled)" in line) and phase == 3:
-                phase = 4
-                MR.set(REDIS_SERVER_STATE, "running")
-                print("start success")
-                start_over = True
-                break
-            elif "ERROR" in line:
-                print("start ERROR:", line)
-                MR.set(REDIS_SERVER_STATE, "ERROR")
-                stop_it_now = True
-                start_over = True
-                break
-            else:
-                t_now = time.time()
-                if t_now - t_start >= timeout:
-                    MR.set(REDIS_SERVER_STATE, "setup timeout")
-                    start_over = True
-                    break
+    # while True:
+    #     if start_over:
+    #         break
+    #     for line in master_p.stdout:
+    #         if "Starting Up" in line and phase == 0:
+    #             phase = 1
+    #             MR.set(REDIS_SERVER_STATE, "1/4")
+    #         elif "Running main.lua" in line and phase == 1:
+    #             phase = 2
+    #             MR.set(REDIS_SERVER_STATE, "2/4")
+    #         elif "Account Communication Success" in line and phase == 2:
+    #             phase = 3
+    #             MR.set(REDIS_SERVER_STATE, "3/4")
+    #         elif ("(active)" in line or "(disabled)" in line) and phase == 3:
+    #             phase = 4
+    #             MR.set(REDIS_SERVER_STATE, "running")
+    #             print("start success")
+    #             start_over = True
+    #             break
+    #         elif "ERROR" in line:
+    #             print("start ERROR:", line)
+    #             MR.set(REDIS_SERVER_STATE, "ERROR")
+    #             stop_it_now = True
+    #             start_over = True
+    #             break
+    #         else:
+    #             t_now = time.time()
+    #             if t_now - t_start >= timeout:
+    #                 MR.set(REDIS_SERVER_STATE, "setup timeout")
+    #                 start_over = True
+    #                 break
+    MR.set(REDIS_SERVER_STATE, "running")  # tmp line should be delete later
     stopped = False
     print("""listen for stopping server""")
     while True:
@@ -114,6 +116,7 @@ def _mp_server():
                         break
                 time.sleep(1)
         time.sleep(1)
+    fd.close()
 
 
 
