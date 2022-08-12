@@ -34,7 +34,7 @@ def _mp_server():
     """start server in multiprocess
     and also handle stopping it
     """
-    fd = open("/home/hikaru/qqbot/utils/dst/manage_server/log.txt", 'w')
+    fd = open("log.txt", 'w')
     MR = redis.Redis(decode_responses=True)
     print("starting multiprocess for start server")
     COMMAND_ROOT = os.path.join(INSTALL_DIR, "bin64")
