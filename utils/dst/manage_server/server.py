@@ -1,5 +1,6 @@
 import configparser
 import os
+import os.path
 import subprocess
 from signal import SIGTERM, SIGINT
 import threading
@@ -34,7 +35,12 @@ def _mp_server():
     """start server in multiprocess
     and also handle stopping it
     """
-    fd = open("log.txt", 'w')
+    log_loc = "log.txt"
+    if os.path.exists(log_loc):  # backup old ones
+        os.rename(log_loc,
+            os.path.join(os.path.dirname(os.path.abspath(log_loc)),
+                time.strftime("log_%y%m%d%H%M%S.txt")))
+    fd = open(log_loc, 'w')
     MR = redis.Redis(decode_responses=True)
     print("starting multiprocess for start server")
     COMMAND_ROOT = os.path.join(INSTALL_DIR, "bin64")
@@ -122,7 +128,7 @@ def _mp_server():
 
 def start_server():
     print("starting")
-    p = mp.Process(target= _mp_server)
+    p = mp.Process(target=_mp_server)
     p.start()
     # cave_p.wait()
     # master_p.wait()
