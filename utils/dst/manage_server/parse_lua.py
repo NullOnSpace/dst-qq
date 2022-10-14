@@ -1,6 +1,8 @@
 import os
 import sys
 import logging
+import collections
+import functools
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -12,7 +14,7 @@ class LazyText(str):
         return LazyText(f"{self}.{name}")
 
 
-class LuaDict(dict):
+class LuaDict(collections.OrderedDict):
     def __getattr__(self, name):
         return self[name]
 
@@ -43,17 +45,16 @@ class Dummy:
 
 class LUAParser:
     
-    def __init__(
-        self, 
-        global_={},
-    ):
+    def __init__(self, global_={}):
         self.global_ = global_  # put variables in this
         self.if_stack = []  # record the if condition meets true or false
         self.for_stack = []  # every record is a list of statements of a for loop
         self.useless_end_counter = 0  # end is useless when context in if condition that dont meet True
         self.last_end_stack = []  # record the next end should be end of "if" or "for" 
 
-    def parse_lua(self, lua_file, start_line=0, end_line=None):
+    def parse_lua(self, lua_file, start_line=0, end_line=None, end_cond=lambda x: False):
+        """:end_cond: a function takes line as arg and return T if needs end else False
+        """
         not_complete = False  # True when need a } or ) in following lines to end
         partial = ""
         prepartial = ""
@@ -62,7 +63,7 @@ class LUAParser:
                 continue
             if i < start_line:
                 continue
-            if end_line and i > end_line:
+            if (end_line and i > end_line) or end_cond(line):
                 break
             if not_complete:
                 partial = partial + line
@@ -174,7 +175,7 @@ class LUAParser:
                 value = s[0]
                 rest = s[1:]
             type_ = "o"  # o for operater
-        elif s[0] == "=" and s[1] not in ("+-*/="):
+        elif s[0] == "=" and s[1] != "=":
             value = "="
             rest = s[1:]
             type_ = "a"  # a for assignment
@@ -272,7 +273,7 @@ class LUAParser:
             if t in ("o", "con", "c"):
                 op = v
             else:
-                if current_value is None:
+                if current_value is None and op is None:
                     current_value = v
                 else:
                     current_value = handle_op(op, current_value, v)
@@ -289,7 +290,9 @@ class LUAParser:
                 value, type_, s = self.read_one_part(s)
                 parts.append(value)
             logger.debug(f"parsing table str got parts:{parts}")
-            if "=" in parts:  # dict
+            if "=" in parts and \
+                    not parts[parts.index("=")-1].strip("[] ").isdigit():
+                # dict
                 result = LuaDict()
                 key = ""
                 stash = []
@@ -320,17 +323,30 @@ class LUAParser:
             else:  # array
                 result = LuaList()
                 stash = []
+                idx = None
                 for part in parts:
-                    if part != ",":
+                    if type(part) is not str or part not in  ",=":
                         stash.append(part)
-                    else:
+                    elif part == "=":
+                        assert len(stash) == 1, f"{stash} not in [d] mode"
+                        idx = int(stash[0].strip("[]"))
+                        stash.clear()
+                    else: # , condition
                         v = self.explain("".join(map(lambda x: str(x), stash)))
-                        result.append(v)
+                        if idx:
+                            result[idx-1] = v
+                            idx = None
+                        else:
+                            result.append(v)
                         stash.clear()
                 else:
                     if stash:
                         v = self.explain("".join(map(lambda x: str(x), stash)))
-                        result.append(v)
+                        if idx:
+                            result[idx-1] = v
+                            idx = None
+                        else:
+                            result.append(v)
             return result
         else:  # empty list
             return LuaList()
@@ -476,6 +492,7 @@ def _do_handler(s, lp):
     return None, ""
 
 def _return_handler(s, lp):
+    lp.global_['__rt'] = lp.explain(s)
     return None, ""
 
 def _function_handler(s, lp):
@@ -568,7 +585,10 @@ def handle_op(op, v1, v2):
     if op == "+":
         return v1 + v2
     elif op == "-":
-        return v1 - v2
+        if v1 is not None:
+            return v1 - v2
+        else:
+            return -v2
     elif op == "*":
         return v1 * v2
     elif op == "/":
@@ -589,6 +609,50 @@ def handle_op(op, v1, v2):
         return v1 != v2
 
 
+def LUA_dump(obj, ident=2, pre_ident=0):
+    """dump py obj to lua string
+    and transform into pprint format
+    :ident: spaces that should be add when in sub level
+    :pre_ident: ident level that subclass from pre class
+    """
+    cr_nl = "\n" + " "*(ident*(pre_ident+1))
+    if issubclass(type(obj), dict):
+        # dump a dict
+        output = ["{",]
+        nextline = False
+        for k, v in obj.items():
+            part1 = f"['{k}'] = "
+            part2 = LUA_dump(v, pre_ident=pre_ident+1)
+            part = part1 + part2 + ","
+            output.append(part)
+        output.append("}")
+        no_nl_result = functools.reduce(str.__add__, output)
+        if len(no_nl_result) > 48:
+            result = cr_nl.join(output)
+        else:
+            result = no_nl_result
+    elif issubclass(type(obj), list):
+        # dump a list
+        output = ["{",]
+        for item in obj:
+            part = LUA_dump(item, pre_ident=pre_ident+1) + ","
+            output.append(part)
+        output.append("}")
+        no_nl_result = functools.reduce(str.__add__, output)
+        if len(no_nl_result) > 48:
+            result = cr_nl.join(output)
+        else:
+            result = no_nl_result
+    elif obj is None:
+        result = "nil"
+    elif obj is True or obj is False:
+        result = str(obj).lower()
+    else:
+        # dump str, num
+        result = repr(obj)
+    return result
+
+
 _IsNotConsole = PseudoFunctions("IsConsole")
 _IsNotConsole.run = lambda x: True
 _IsPS4 = PseudoFunctions("IsPS4")
@@ -604,3 +668,12 @@ LUA_BUILTINS = {
     'true': True,
     'false': False,
 }
+
+def main():
+    line = "{{x=560,z=-40}}"
+    lp = LUAParser(global_=LUA_BUILTINS)
+    print(lp.explain(line))
+
+
+if __name__ == "__main__":
+    main()
