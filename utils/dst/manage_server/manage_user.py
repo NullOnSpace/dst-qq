@@ -67,7 +67,7 @@ def get_bin_32(s):
 
 def ku_to_name(ku):
     full_ku = ku[:2] + "_" + ku[2:]
-    ku_path = os.path.join(CWD, 'temp', 'ku_dict.json')
+    ku_path = os.path.join(CWD, 'total_ku_dict.json')
     with open(ku_path, 'r') as fp:
         ku_dict = json.load(fp)
     if full_ku in ku_dict:
