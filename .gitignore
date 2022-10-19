@@ -169,3 +169,5 @@ cq-http/*
 *.txt
 utils/dst/manage_server/mulpro_imp.py
 mp_out.py
+temp/
+.vscode/

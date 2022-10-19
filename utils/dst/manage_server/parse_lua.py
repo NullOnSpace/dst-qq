@@ -160,10 +160,14 @@ class LUAParser:
             for n in s:
                 if n in ("0123456789."):
                     num += n
+                elif n == 'e':
+                    num += 'e'
+                elif n == '-' and num[-1] == 'e':
+                    num += '-'
                 else:
                     break
             rest = s[len(num):]
-            if "." in num:
+            if "." in num or 'e' in num:
                 value = float(num)
             else:
                 value = int(num)
@@ -553,7 +557,7 @@ def fetch_end(s):
         pos = rest.find(start)
         while True:
             if pos == 0:
-                return ""
+                return '""'
             elif rest[pos-1] != "\\":
                 return start + rest[:pos+1]
             else:

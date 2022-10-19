@@ -58,37 +58,6 @@ def _mp_server():
     stop_it_now = False
     phase = 0
     start_over = False
-    # while True:
-    #     if start_over:
-    #         break
-    #     for line in master_p.stdout:
-    #         if "Starting Up" in line and phase == 0:
-    #             phase = 1
-    #             MR.set(REDIS_SERVER_STATE, "1/4")
-    #         elif "Running main.lua" in line and phase == 1:
-    #             phase = 2
-    #             MR.set(REDIS_SERVER_STATE, "2/4")
-    #         elif "Account Communication Success" in line and phase == 2:
-    #             phase = 3
-    #             MR.set(REDIS_SERVER_STATE, "3/4")
-    #         elif ("(active)" in line or "(disabled)" in line) and phase == 3:
-    #             phase = 4
-    #             MR.set(REDIS_SERVER_STATE, "running")
-    #             print("start success")
-    #             start_over = True
-    #             break
-    #         elif "ERROR" in line:
-    #             print("start ERROR:", line)
-    #             MR.set(REDIS_SERVER_STATE, "ERROR")
-    #             stop_it_now = True
-    #             start_over = True
-    #             break
-    #         else:
-    #             t_now = time.time()
-    #             if t_now - t_start >= timeout:
-    #                 MR.set(REDIS_SERVER_STATE, "setup timeout")
-    #                 start_over = True
-    #                 break
     MR.set(REDIS_SERVER_STATE, "running")  # tmp line should be delete later
     stopped = False
     print("""listen for stopping server""")
@@ -130,13 +99,6 @@ def start_server():
     print("starting")
     p = mp.Process(target=_mp_server)
     p.start()
-    # cave_p.wait()
-    # master_p.wait()
-    # os.chdir(CWD)
-    # with open("master_log.txt", "w") as log:
-    #     log.write(master_p.stdout.read())
-    # with open("caves_log.txt", "w") as log:
-    #     log.write(cave_p.stdout.read())
 
 
 def stop_server():

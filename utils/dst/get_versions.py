@@ -3,6 +3,7 @@
 
 import aiohttp
 from bs4 import BeautifulSoup as BS
+import requests
 
 
 class TooManyRequests(Exception):
@@ -24,6 +25,20 @@ def fetch_page():
                 raise TooManyRequests("fetch page 6 times")
 
 
+async def aio_fetch_page():
+    fail_count = 0
+    while True:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(URL) as res:
+                if res.status == 200:
+                    return await res.text()
+                else:
+                    fail_count += 1
+                    if fail_count == 5:
+                        raise TooManyRequests("fetch page 6 times")
+
+
+
 def analyze_page(raw_html):
     """Analyze page and
      return the patch list in tuple
@@ -39,6 +54,32 @@ def analyze_page(raw_html):
          rowid = t.attrs["data-rowid"]
          patch_list.append((patch_no, test_or_release, release_date, is_hotfix, rowid))
     return patch_list
+
+
+def get_latest_version(test=False):
+    try:
+        r = fetch_page()
+    except TooManyRequests:
+        return "Network Error"
+    else:
+        pl = analyze_page(r.content)
+    pattern = "{patch_no:6} {tor:8} {date:17}"
+    meta = 'Test' if test else 'Release'
+    m = max(filter(lambda x: x[1]==meta, pl), key=lambda x: int(x[0]))
+    return pattern.format(patch_no=m[0], tor=m[1], date=m[2][9:])
+
+
+async def aio_get_latest_version(test=False):
+    try:
+        content = await aio_fetch_page()
+    except TooManyRequests:
+        return "Network Error"
+    else:
+        pl = analyze_page(content)
+    pattern = "{patch_no:6} {tor:8} {date:17}"
+    meta = 'Test' if test else 'Release'
+    m = max(filter(lambda x: x[1]==meta, pl), key=lambda x: int(x[0]))
+    return pattern.format(patch_no=m[0], tor=m[1], date=m[2][9:])
 
 
 def print_metas(patch_list):
@@ -59,4 +100,6 @@ def main():
     print_metas(pl)
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    r = asyncio.run(aio_get_latest_version())
+    print(r)
