@@ -1,7 +1,9 @@
-import copy
 import os
 import json
 
+import redis
+
+REDIS_KU_MAPPING = "dst:user:ku"
 
 CWD = os.path.dirname(__file__)
 
@@ -68,6 +70,10 @@ def get_bin_32(s):
 def ku_to_name(ku):
     full_ku = ku[:2] + "_" + ku[2:]
     ku_path = os.path.join(CWD, 'total_ku.json')
+    r = redis.Redis(decode_responses=True)
+    name = r.hget(REDIS_KU_MAPPING, full_ku)
+    if name:
+        return name
     with open(ku_path, 'r') as fp:
         ku_dict = json.load(fp)
     if full_ku in ku_dict:

@@ -313,7 +313,7 @@ class LogAnalyzer:
 
 def main():
     log_path = os.path.join(CWD, 'manage_server/log.txt')
-    ana = LogAnalyzer(log_path, realtime=True)
+    ana = LogAnalyzer(log_path, realtime=False)
     ana.start()
 
 

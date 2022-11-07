@@ -1,4 +1,3 @@
-import difflib
 import os
 import json
 import hashlib
