@@ -8,7 +8,7 @@ sys.path.append(cwd)
 
 from get_prefab_list import PREFABS as ENT_TRANSLATION
 
-HEIGHT = WIDTH = 439*4
+HEIGHT = WIDTH = 479*4
 
 
 fnt_imp = ImageFont.truetype(
@@ -181,9 +181,19 @@ TILE_COLOR_MAP = dict(
 )
 
 
-def draw_ents(savedata, im=None):
+def draw_ents(savedata, im=None, width=None, height=None):
+    if not (im or (width and height)):
+        raise ValueError("None of im or size")
+    if width is None:
+        width = im.width
+    else:
+        width = width*4
+    if height is None:
+        height = im.height
+    else:
+        height = height*4
     if im is None:
-        im = Image.new("RGB", (WIDTH, HEIGHT), color="#FEFEFE")
+        im = Image.new("RGB", (width, height), color="#FEFEFE")
     draw = ImageDraw.Draw(im)
     ents = savedata["ents"]
     for prefab, details in ents.items():
@@ -194,7 +204,7 @@ def draw_ents(savedata, im=None):
             ent_name = ENT_TRANSLATION.get(prefab, prefab)
             x = detail.get("x")
             z = detail.get("z")
-            crd = coord2((x, z))
+            crd = coord2((x, z), width=width, height=height)
             draw.rectangle(
                 [(crd[0]-1, crd[1]+1), (crd[0]+1, crd[1]-1)], 
                 outline="#010101")
@@ -219,7 +229,7 @@ def _draw_wormholes(worms, im, prefab):
         id_ = worm["id"]
         x = worm["x"]
         z = worm["z"]
-        crd = coord2((x, z))
+        crd = coord2((x, z), width=im.width, height=im.height)
         if id_ in bid:
             color, serial = bid[id_]
         else:
@@ -238,9 +248,19 @@ def _draw_wormholes(worms, im, prefab):
                 fill="#010101", anchor="md", font=fnt_info)
 
 
-def draw_background(map_file, im=None):
+def draw_background(map_file, im=None, width=None, height=None):
+    if not (im or (width and height)):
+        raise ValueError("None of im or size")
+    if width == None:
+        width = im.width
+    else:
+        width = width*4
+    if height == None:
+        height = im.height
+    else:
+        height = height*4
     if im is None:
-        im = Image.new("RGB", (WIDTH, HEIGHT), color="#FEFEFE")
+        im = Image.new("RGB", (width, height), color="#FEFEFE")
     draw = ImageDraw.Draw(im)
     with open(map_file, 'r') as fp:
         fp.read(6)
@@ -262,18 +282,28 @@ def draw_background(map_file, im=None):
     return im
 
 
-def draw_tiles(tiles, im=None):
+def draw_tiles(tiles, im=None, width=None, height=None):
+    if not (im or (width and height)):
+        raise ValueError("None of im or size")
+    if width == None:
+        width = im.width
+    else:
+        width = width*4
+    if height == None:
+        height = im.height
+    else:
+        height = height*4
     if im is None:
-        im = Image.new("RGB", (WIDTH, HEIGHT), color="#FEFEFE")
+        im = Image.new("RGB", (width, height), color="#FEFEFE")
     draw = ImageDraw.Draw(im)
     empty_color = set()
     for idx, tile in enumerate(tiles):
-        z, x = divmod(idx, WIDTH/4)
+        z, x = divmod(idx, width/4)
         z = z*4
         x = x*4
-        rect = ((x, (HEIGHT-z)-1), (x+3, HEIGHT-(z+3)-1))
-        tile_name = TILE_ID_REVERSE_MAP[tile]
-        color = TILE_COLOR_MAP[tile_name]
+        rect = ((x, (height-z)-1), (x+3, height-(z+3)-1))
+        tile_name = TILE_ID_REVERSE_MAP.get(tile, "unknown")
+        color = TILE_COLOR_MAP.get(tile_name, "#030303")
         if type(color) is int:
             empty_color.add(color)
             color = '#f2ecde'
@@ -282,9 +312,15 @@ def draw_tiles(tiles, im=None):
     return im
 
 
-def draw_nodes(nodes, im=None):
+def draw_nodes(nodes, im=None, width=None, height=None):
+    if not (im or (width and height)):
+        raise ValueError("None of im or size")
+    if width:
+        width = width*4
+    if height:
+        height = height*4
     if im is None:
-        im = Image.new("RGB", (WIDTH, HEIGHT), color="#FEFEFE")
+        im = Image.new("RGB", (width, height), color="#FEFEFE")
     draw = ImageDraw.Draw(im)
     for node in nodes:
         poly_to_trans = node.get('poly')
@@ -293,9 +329,13 @@ def draw_nodes(nodes, im=None):
     return im
 
 
-def draw_roads(roads, im=None):
+def draw_roads(roads, im=None, width=None, height=None):
+    if width:
+        width = width*4
+    if height:
+        height = height*4
     if im is None:
-        im = Image.new("RGB", (WIDTH, HEIGHT), color="#FEFEFE")
+        im = Image.new("RGB", (width, height), color="#FEFEFE")
     draw = ImageDraw.Draw(im)
     for road in roads:
         if road:
@@ -310,6 +350,7 @@ def coord1(crd):  # canvas to map
     return x - WIDTH/2, HEIGHT/2 - z
 
 
-def coord2(crd):  # map to canvas
+def coord2(crd, width, height):
+    # map to canvas
     x, z = crd
-    return (x + WIDTH/2), (HEIGHT/2 - z)
+    return (x + width/2), (height/2 - z)

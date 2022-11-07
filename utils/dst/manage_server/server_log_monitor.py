@@ -1,3 +1,4 @@
+# this has been deprecated since we use log_analyzer now
 import time
 import redis
 

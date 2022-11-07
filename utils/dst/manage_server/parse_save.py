@@ -44,6 +44,8 @@ MAP_ENTS = (
     'mooseegg',
     'deerclop',
     'bearger',
+    'charlie_stage_post',
+    'statueharp_hedgespawner',
     # Caves
     # "ancient_altar_broken_ruinsrespawner_inst",
     # "ruins_statue_mage_nogem_ruinsrespawner_inst",
@@ -208,7 +210,7 @@ def parse_roads(roads_str):
 
 
 def main():
-    with open(os.path.join(cwd, 'temp/000068_cave'), 'r') as fp:
+    with open(os.path.join(cwd, 'temp/00002_wierd'), 'r') as fp:
         savedata = parse(fp, ents_level=1)
     print(list(savedata.keys()))
     print(savedata['meta'])
@@ -232,7 +234,9 @@ def main():
         draw_tiles
     im = None
     tiles = parse_map_nav(savedata['map']['tiles'])
-    im = draw_tiles(tiles)
+    height = savedata['map']['height']
+    width = savedata['map']['width']
+    im = draw_tiles(tiles, width=width, height=height)
     # with open(os.path.join(cwd, "temp/nodes.lua"), 'r') as fp:
     #     s = fp.read()
     # n = parse_nodes(s)
@@ -388,10 +392,5 @@ def countprefab(prefab, cluster_dir):
     return result
 
 if __name__ == "__main__":
-    p = os.path.join('/home/hikaru/.klei/DoNotStarveTogether/MyDediServer_10171741')
-    s = countprefab('oceantree_pillar', p)
-    from manage_user import session_to_ku, ku_to_name
-    r = {ku_to_name(session_to_ku(k)): v for k, v in s['user'].items()}
-    s['user'] = r
-    pprint.pprint(s)
+    main()
 

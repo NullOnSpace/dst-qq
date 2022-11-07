@@ -61,7 +61,7 @@ def fetch_item_settings(item):
     # for given item, return all valid settings in list
     # if item is misc return []
     # if item not a valid item, return None
-    settings = read_level_settings() 
+    settings = read_level_settings()
     for k, v in settings.items():
         if item in v:  # misc
             return []
@@ -94,7 +94,7 @@ def rewrite_item(item, value, cluster="Master"):
             PL.LUA_dump(override)
             path = os.path.join(CLUSTER_DIR, cluster, "leveldataoverride.lua")
             write_to_override(override, path)
-            return True
+            return True, None
         else:
             return False, f'{value} not in: {valid_values}'
     else:
@@ -111,7 +111,7 @@ def write_to_override(override, path):
 if __name__ == "__main__":
     OR = read_level_override()
     LS = read_level_settings()
+    import pprint
+    pprint.pprint(LS, indent=2)
     print(fetch_item_override('krampus'))
     print(fetch_item_settings('krampus'))
-    rewrite_item('krampus', 'often')
-    print(fetch_item_override('krampus'))

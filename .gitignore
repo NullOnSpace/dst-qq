@@ -171,3 +171,10 @@ utils/dst/manage_server/mulpro_imp.py
 mp_out.py
 temp/
 .vscode/
+*.zip
+foralive.py
+uncom_in_TMIP.json
+translations.json
+total_ku.json
+ku_dict.json
+complete_toomanyitems.py
