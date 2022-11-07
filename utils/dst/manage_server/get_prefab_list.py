@@ -69,4 +69,4 @@ for k, v in PREFABS.items():
         REVERSE_PREFABS[v] = [k,]
 
 if __name__ == "__main__":
-    update
+    update()
