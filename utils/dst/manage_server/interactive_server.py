@@ -233,8 +233,12 @@ def send_console_command(popen):
 def get_output(popen):
     lh = LineHandler()
     while True:
-        out = popen.stdout.readline()
-        lh.handle(out)
+        try:
+            out = popen.stdout.readline()
+        except UnicodeDecodeError:
+            continue
+        else:
+            lh.handle(out)
 
 def dummy_redis_dec(name):
     def _decorator(func):
