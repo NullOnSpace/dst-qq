@@ -206,7 +206,8 @@ async def search_prefab(session):
         msg = HELP_MESSAGE
     await session.send(msg)
 
-@on_command('rollback', aliases=('回档',), only_to_me=TEST)
+@on_command('rollback', aliases=('回档',), only_to_me=TEST, 
+        permission=perm.SUPERUSER)
 async def rollback(session):
     print("rollback")
     HELP_MESSAGE = "输入 '/回档 天数'如 '/回档 2' 来回档 一次最多3天"
