@@ -19,9 +19,8 @@ STRING_MODEL = """服务器名: \n\t{server_name}
 天数: {day}
 版本: {version}
 """
-TEST = False
 
-@on_command('quest', aliases=('查服',), only_to_me=TEST)
+@on_command('quest', aliases=('旧查服',), only_to_me=True)
 async def quest(session):
     servers = await get_server()
     server_list = servers['List']
@@ -71,7 +70,7 @@ STATE_DICT = {
     "rollback": "回档",
 }
 
-@on_command('info', aliases=('服务器状态',), only_to_me=TEST)
+@on_command('info', aliases=('服务器状态', '查服'), only_to_me=True)
 async def info(session):
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     i = await r.get(REDIS_SERVER_INFO)
@@ -81,7 +80,7 @@ async def info(session):
         await session.send("查询不到服务器")
 
 @on_command('start', aliases=('启动',),
-    permission=perm.SUPERUSER, only_to_me=TEST)
+    permission=perm.SUPERUSER, only_to_me=True)
 async def start(session):
     print("start")
     r = aioredis.from_url("redis://localhost", decode_responses=True)
@@ -108,7 +107,7 @@ async def start(session):
                 return
 
 @on_command('stop', aliases=('关机',),
-    permission=perm.SUPERUSER, only_to_me=TEST)
+    permission=perm.SUPERUSER, only_to_me=True)
 async def stop(session):
     print("stop")
     r = aioredis.from_url("redis://localhost", decode_responses=True)
@@ -127,7 +126,7 @@ async def stop(session):
     await r.close()
 
 @on_command('update', aliases=('更新',),
-    permission=perm.SUPERUSER, only_to_me=TEST)
+    permission=perm.SUPERUSER, only_to_me=True)
 async def update(session):
     print("update")
     r = aioredis.from_url("redis://localhost", decode_responses=True)
@@ -150,7 +149,7 @@ async def update(session):
     await r.close()
 
 
-@on_command('version', aliases=('版本',), only_to_me=TEST)
+@on_command('version', aliases=('版本',), only_to_me=True)
 async def get_version(session):
     print("get version")
     HELP_MESSAGE = "输入 '/版本 正式' 或 '/版本 测试'"
@@ -164,7 +163,7 @@ async def get_version(session):
     await session.send(msg)
 
 
-@on_command('search', aliases=('查找',), only_to_me=TEST)
+@on_command('search', aliases=('查找',), only_to_me=True)
 async def search_prefab(session):
     print("search prefab")
     HELP_MESSAGE = "输入 '/查找 物品名' 来查看物品数量"
@@ -206,7 +205,7 @@ async def search_prefab(session):
         msg = HELP_MESSAGE
     await session.send(msg)
 
-@on_command('rollback', aliases=('回档',), only_to_me=TEST, 
+@on_command('rollback', aliases=('回档',), only_to_me=True, 
         permission=perm.SUPERUSER)
 async def rollback(session):
     print("rollback")
@@ -242,7 +241,7 @@ async def rollback(session):
     else:
         await session.send(HELP_MESSAGE)
 
-@on_command('chat', aliases=('聊天',), only_to_me=TEST)
+@on_command('chat', aliases=('聊天',), only_to_me=True)
 async def chat(session):
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     msg = session.current_arg_text.strip()
