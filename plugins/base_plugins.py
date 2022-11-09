@@ -40,13 +40,12 @@ async def quest(session):
                 season_elapsed = int(days_info['DaysElapsedInSeason']) + 1
                 version = r['Version']
                 players = r['Players']
-                report = STRING_MODEL.format(**locals())
+                report += STRING_MODEL.format(**locals())
                 if players:
                     report += "玩家列表:\n"
                 for player in players:
                     report += f"\t{player['Name']} ({player['Prefab']})\n"
-    else:
-        report = "没有找到服务器涅"
+    report = report or "没有找到服务器涅"
     await session.send(report)
 
 REDIS_QBOT_COMMAND = "dst:qbot:command"
