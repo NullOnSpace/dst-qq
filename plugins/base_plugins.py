@@ -24,7 +24,7 @@ STRING_MODEL = """服务器名: \n\t{server_name}
 async def quest(session):
     servers = await get_server()
     server_list = servers['List']
-    report = ""
+    reports = []
     if server_list:
         for server in server_list:
             if server['Host'] == HOST:
@@ -45,8 +45,9 @@ async def quest(session):
                     report += "玩家列表:\n"
                 for player in players:
                     report += f"\t{player['Name']} ({player['Prefab']})\n"
-    report = report or "没有找到服务器涅"
-    await session.send(report)
+                reports.append(report)
+    r = '-------\n'.join(reports) or "没有找到服务器涅"
+    await session.send(r)
 
 REDIS_QBOT_COMMAND = "dst:qbot:command"
 REDIS_SERVER_STATE = "dst:server:state"
