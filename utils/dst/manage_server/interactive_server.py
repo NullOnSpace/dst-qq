@@ -273,6 +273,7 @@ class LineHandler:
         self.last_chat_dt = None  # annoucement chat
         self.version = "unknown"
         self.rollback = False
+        self.regen = False
         if use_redis is True:
             self.redis = redis.Redis(decode_responses=True)
         else:
@@ -402,12 +403,20 @@ class LineHandler:
                 self.rollback = True
                 self.redis.lpush(REDIS_SERVER_STATE, "rollback")
                 logger.info(f"server rollback {count}")
-        elif self.rollback is True and \
+        elif content.startswith("Received world reset"):
+            self.redis.lpush(REDIS_SERVER_STATE, 'regenerate')
+            self.regen = True
+            logger.info(f"server regenerating")
+        elif (self.rollback is True or self.regen is True) and \
                 ("(active)" in line or "(disabled)" in line):
             self.redis.lpush(REDIS_SERVER_STATE, "running")
-            self.rollback = False
             update_info = True
-            logger.info(f"server rollback success")
+            if self.rollback is True:
+                self.rollback = False
+                logger.info(f"server rollback success")
+            elif self.regen is True:
+                self.regen = False
+                logger.info(f"server regenerate success")
         elif content.startswith("Shutting down"):
             logger.info("shutting down")
         elif content.startswith("Spawn request"):

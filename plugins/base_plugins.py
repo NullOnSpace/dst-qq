@@ -244,6 +244,32 @@ async def rollback(session):
     else:
         await session.send(HELP_MESSAGE)
 
+@on_command('regen', aliases=('重置',), only_to_me=True, 
+        permission=perm.SUPERUSER)
+async def regen(session):
+    print("regenerate world")
+    HELP_MESSAGE = "输入 '/重置' 来重置世界"
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    await r.lpush(REDIS_CONSOLE_COMAND, f"c_regenerateworld()")
+    await session.send(f"正尝试重置世界")
+    rg = False
+    while True:
+        state_tp = await r.brpop(REDIS_SERVER_STATE, timeout=50)
+        if state_tp is None:
+            await session.send("重置超时")
+            return
+        else:
+            state = state_tp[1]
+            print(f"get state:{state} in regenerate polling")
+        if rg is False:
+            if state == "regenerate":
+                rg = True
+                await session.send(f"开始重置")
+        else:
+            if state == "running":
+                await session.send("重置完成")
+                break
+
 @on_command('chat', aliases=('聊天',), only_to_me=True)
 async def chat(session):
     r = aioredis.from_url("redis://localhost", decode_responses=True)
