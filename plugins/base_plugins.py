@@ -1,10 +1,13 @@
 from nonebot import on_command, CommandSession, permission as perm
 from redis import asyncio as aioredis
+from aiocqhttp.exceptions import ActionFailed
 
 import asyncio
 import json
 from hashlib import sha1
 import time
+import os
+import shutil
 
 from utils.dst.get_server_list_aio import get_server, get_server_detail
 from utils.dst.get_versions import aio_get_latest_version
@@ -278,3 +281,58 @@ async def chat(session):
             await session.send("\n".join(msgs))
         else:
             await session.send("没有更多的新消息了")
+
+
+@on_command('upload', aliases=('归档',), 
+        permission=perm.SUPERUSER, only_to_me=True)
+async def upload(session):
+    print("upload archive")
+    HELP_MESSAGE = "在群内输入 '/归档' 上传归档和地图到群文件"
+    ctx = session.ctx
+    msg_type = ctx['message_type']
+    if msg_type != "group":
+        msg = HELP_MESSAGE
+    else:
+        group_id = ctx['group_id']
+        r = aioredis.from_url("redis://localhost", decode_responses=True)
+        await session.send("正在处理...")
+        task_code = sha1(str(time.time()).encode()).hexdigest()
+        task = ('upload_archive', task_code)
+        task_json = json.dumps(task)
+        await r.rpush(REDIS_TASK_KEY, task_json)
+        result_key = REDIS_TASK_RESULT_KEY_PREPEND + task_code
+        max_tries = 120
+        while True:
+            result_json = await r.get(result_key)
+            if result_json is None:
+                await asyncio.sleep(2)
+                max_tries -= 1
+                if max_tries <= 0:
+                    msg = "请求超时"
+                    break
+            else:
+                await r.delete(result_key)
+                result = json.loads(result_json)
+                print(f"receive result {result}")
+                maps = result['maps']
+                file_7z = result['7z']
+                temp_dir = result['temp_dir']
+                try:
+                    await session.bot.call_action('upload_group_file', 
+                        group_id=group_id, file=file_7z, 
+                        name=file_7z.split("/")[-1],
+                    )
+                    for map in maps:
+                        await session.bot.call_action('upload_group_file', 
+                            group_id=group_id, file=map, 
+                            name=map.split("/")[-1],
+                        )
+                except ActionFailed:
+                    msg = "上传失败"
+                else:
+                    msg = "上传成功"
+                os.remove(file_7z)
+                shutil.rmtree(temp_dir)
+                break
+    await session.send(msg)
+    

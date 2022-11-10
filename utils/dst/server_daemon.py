@@ -8,6 +8,7 @@ from manage_server.get_config import CLUSTER_DIR
 from manage_server.parse_save import countprefab
 from manage_server.get_prefab_list import PREFABS, REVERSE_PREFABS
 from manage_server.manage_user import session_to_ku, ku_to_name
+from manage_server.archive_cluster import zip_cluster
 
 import redis
 
@@ -29,6 +30,10 @@ def search_prefab(search_word):
         result['user'] = r
     else:
         return {}
+    return result
+
+def upload_archive():
+    result = zip_cluster(CLUSTER_DIR)
     return result
 
 
@@ -53,6 +58,7 @@ def main():
 
 TASK_DICT = {
     'search_prefab': search_prefab,
+    'upload_archive': upload_archive,
 }
 
 if __name__ == "__main__":
