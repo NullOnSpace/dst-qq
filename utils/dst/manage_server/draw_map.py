@@ -15,7 +15,6 @@ fnt_imp = ImageFont.truetype(
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", size=30)
 fnt_info = ImageFont.truetype(
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", size=24)
-fnt_debug = ImageFont.truetype("Pillow/Tests/fonts/FreeMono.ttf", size=12)
 
 
 TILE_ID_MAP = dict(
@@ -209,8 +208,6 @@ def draw_ents(savedata, im=None, width=None, height=None):
                 [(crd[0]-1, crd[1]+1), (crd[0]+1, crd[1]-1)], 
                 outline="#010101")
             draw.text(crd, ent_name, fill="#010101", anchor="md", font=fnt_imp)
-            # draw.text(crd, 
-            #         str((x, z)), fill="#010101", anchor="ma", font=fnt_debug)
     return im
 
 
