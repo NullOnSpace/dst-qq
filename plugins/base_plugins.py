@@ -321,11 +321,13 @@ async def upload(session):
                     await session.bot.call_action('upload_group_file', 
                         group_id=group_id, file=file_7z, 
                         name=file_7z.split("/")[-1],
+                        folder="群存档",
                     )
                     for map in maps:
                         await session.bot.call_action('upload_group_file', 
                             group_id=group_id, file=map, 
                             name=map.split("/")[-1],
+                            folder="地图",
                         )
                 except ActionFailed:
                     msg = "上传失败"
