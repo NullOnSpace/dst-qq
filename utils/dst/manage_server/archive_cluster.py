@@ -10,6 +10,10 @@ from parse_save import parse, parse_map_nav, get_latest_save
 from draw_map import draw_ents, draw_tiles
 
 
+# trans table from dst emotion code to None
+TRANS = str.maketrans({i: None for i in range(983041, 983065)})
+
+
 def handle_savefile(save_file_path):
     # handle a savefile and return im of map and seed and days
     with open(save_file_path, 'r') as fp:
@@ -42,6 +46,7 @@ def zip_cluster(cluster_dir):
     config.read(cluster_ini_path)
     name = config['NETWORK']['cluster_name']
     name_safe = name.replace(" ", "_")
+    name_safe = name_safe.translate(TRANS)
     maps = []
     for level, save_file in save.items():
         i = handle_savefile(save_file)
