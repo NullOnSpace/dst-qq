@@ -19,7 +19,7 @@ def handle_savefile(save_file_path):
     except KeyError:
         seed = '0'
     try:
-        cycles = data['persistedate']['worldstate']['cycles']
+        cycles = data['map']['persistdata']['worldstate']['cycles']
     except KeyError:
         cycles = 0
     info = {'seed': seed, 'days': str(cycles+1)}
@@ -106,7 +106,7 @@ def purge_cluster(cluster_dir):
 
 
 def main():
-    cluster_dir = '/home/hikaru/.klei/DoNotStarveTogether/MyDediServer_10171741'
+    cluster_dir = '/home/hikaru/.klei/DoNotStarveTogether/MyDediServer'
     zip_cluster(cluster_dir)
 
 
