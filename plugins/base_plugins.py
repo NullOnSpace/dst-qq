@@ -222,6 +222,7 @@ async def rollback(session):
     else:
         days = -99999
     if days >= 0 and days <= 3:
+        await r.delete(REDIS_SERVER_STATE)
         await r.lpush(REDIS_CONSOLE_COMAND, f"c_rollback({days})")
         await session.send(f"正尝试回档 {days}")
         rb = False
@@ -250,6 +251,7 @@ async def regen(session):
     print("regenerate world")
     HELP_MESSAGE = "输入 '/重置' 来重置世界"
     r = aioredis.from_url("redis://localhost", decode_responses=True)
+    await r.delete(REDIS_SERVER_STATE)
     await r.lpush(REDIS_CONSOLE_COMAND, f"c_regenerateworld()")
     await session.send(f"正尝试重置世界")
     rg = False
