@@ -91,9 +91,12 @@ async def start(session):
     await r.lpush(REDIS_QBOT_COMMAND, 'start')
     last_state = ""
     starting_strings = []
+    t_start = time.time()
+    timeout = 100
     while True:
         _, state = await r.brpop(REDIS_SERVER_STATE)
         if last_state != state:
+            t_start = time.time()
             print(last_state, state)
             last_state = state
             if "/" in state:
@@ -108,6 +111,8 @@ async def start(session):
                 await session.send(STATE_DICT[state])
                 await r.close()
                 return
+        if time.time() - t_start > timeout:
+            await session.send("启动超时")
 
 @on_command('stop', aliases=('关机',),
     permission=perm.SUPERUSER, only_to_me=True)
@@ -283,6 +288,7 @@ async def chat(session):
     if msg:
         # send msg to server
         if len(msg) > 30:
+            await session.send(f"消息过长 请在30字以内")
             return
         if message_type == 'group':
             nickname = sender.get("card") or sender.get("nickname")
