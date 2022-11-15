@@ -130,4 +130,10 @@ def roll_maps():
 
 
 if __name__ == "__main__":
-    roll_maps()
+    start_up()
+    try:
+        print("started waiting")
+        while True:
+            time.sleep(10)
+    except KeyboardInterrupt:
+        shutdown()
