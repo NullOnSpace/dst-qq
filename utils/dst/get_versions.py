@@ -47,12 +47,16 @@ def analyze_page(raw_html):
     patch_tags = soup.find_all(name="li", attrs={"class": "cCmsRecord_row"})
     patch_list = []
     for t in patch_tags:
-         patch_no = str(list(t.a.h3.strings)[0]).strip()
-         test_or_release = str(t.a.h3.span.string)
-         release_date = str(t.a.div.string).strip('\n\t.')
-         is_hotfix = t.find(name="i", attrs={"class": "fa-warning"}) and True
-         rowid = t.attrs["data-rowid"]
-         patch_list.append((patch_no, test_or_release, release_date, is_hotfix, rowid))
+        patch_no = str(list(t.a.h3.strings)[0]).strip()
+        t_or_r_tag = t.a.h3.span
+        if t_or_r_tag:
+            test_or_release = str(t.a.h3.span.string)
+        else:
+            test_or_release = 'both'
+        release_date = str(t.a.div.string).strip('\n\t.')
+        is_hotfix = t.find(name="i", attrs={"class": "fa-warning"}) and True
+        rowid = t.attrs["data-rowid"]
+        patch_list.append((patch_no, test_or_release, release_date, is_hotfix, rowid))
     return patch_list
 
 
@@ -65,7 +69,10 @@ def get_latest_version(test=False):
         pl = analyze_page(r.content)
     pattern = "{patch_no:6} {tor:8} {date:17}"
     meta = 'Test' if test else 'Release'
-    m = max(filter(lambda x: x[1]==meta, pl), key=lambda x: int(x[0]))
+    m = max(
+        filter(lambda x: x[1]==meta or x[1]=='both', pl), 
+        key=lambda x: int(x[0]),
+    )
     return pattern.format(patch_no=m[0], tor=m[1], date=m[2][9:])
 
 
@@ -78,7 +85,10 @@ async def aio_get_latest_version(test=False):
         pl = analyze_page(content)
     pattern = "{patch_no:6} {tor:8} {date:17}"
     meta = 'Test' if test else 'Release'
-    m = max(filter(lambda x: x[1]==meta, pl), key=lambda x: int(x[0]))
+    m = max(
+        filter(lambda x: x[1]==meta or x[1]=='both', pl), 
+        key=lambda x: int(x[0])
+    )
     return pattern.format(patch_no=m[0], tor=m[1], date=m[2][9:])
 
 

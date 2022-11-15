@@ -11,7 +11,6 @@ import shutil
 
 from utils.dst.get_server_list_aio import get_server, get_server_detail
 from utils.dst.get_versions import aio_get_latest_version
-from utils.dst.server_daemon import REDIS_TASK_KEY
 from . import customize_strings as cs
 
 
@@ -22,35 +21,6 @@ STRING_MODEL = """服务器名: \n\t{server_name}
 天数: {day}
 版本: {version}
 """
-
-@on_command('quest', aliases=('旧查服',), only_to_me=True)
-async def quest(session):
-    servers = await get_server()
-    server_list = servers['List']
-    reports = []
-    if server_list:
-        for server in server_list:
-            if server['Host'] == HOST:
-                server_name = server['Name']
-                connected = server['Connected']
-                max_connections = server['MaxConnections']
-                season = server['Season']
-                row_id = server['RowId']
-                r = await get_server_detail(row_id)
-                print(3)
-                days_info = r['DaysInfo']
-                day = days_info['Day']
-                season_elapsed = int(days_info['DaysElapsedInSeason']) + 1
-                version = r['Version']
-                players = r['Players']
-                report = STRING_MODEL.format(**locals())
-                if players:
-                    report += "玩家列表:\n"
-                for player in players:
-                    report += f"\t{player['Name']} ({player['Prefab']})\n"
-                reports.append(report)
-    r = '-------\n'.join(reports) or "没有找到服务器涅"
-    await session.send(r)
 
 REDIS_QBOT_COMMAND = "dst:qbot:command"
 REDIS_SERVER_STATE = "dst:server:state"
@@ -72,6 +42,35 @@ STATE_DICT = {
     "start stuck": "启动受阻",
     "rollback": "回档",
 }
+
+
+@on_command('quest', aliases=('旧查服',), only_to_me=True)
+async def quest(session):
+    servers = await get_server()
+    server_list = servers['List']
+    reports = []
+    if server_list:
+        for server in server_list:
+            if server['Host'] == HOST:
+                server_name = server['Name']
+                connected = server['Connected']
+                max_connections = server['MaxConnections']
+                season = server['Season']
+                row_id = server['RowId']
+                r = await get_server_detail(row_id)
+                days_info = r['DaysInfo']
+                day = days_info['Day']
+                season_elapsed = int(days_info['DaysElapsedInSeason']) + 1
+                version = r['Version']
+                players = r['Players']
+                report = STRING_MODEL.format(**locals())
+                if players:
+                    report += "玩家列表:\n"
+                for player in players:
+                    report += f"\t{player['Name']} ({player['Prefab']})\n"
+                reports.append(report)
+    r = '-----------\n'.join(reports) or "没有找到服务器涅"
+    await session.send(r)
 
 @on_command('info', aliases=('服务器状态', '查服'), only_to_me=True)
 async def info(session):
@@ -97,7 +96,7 @@ async def start(session):
         _, state = await r.brpop(REDIS_SERVER_STATE)
         if last_state != state:
             t_start = time.time()
-            print(last_state, state)
+            print(f"last: {last_state}, current: {state}")
             last_state = state
             if "/" in state:
                 order, total = state.split("/")
@@ -113,6 +112,7 @@ async def start(session):
                 return
         if time.time() - t_start > timeout:
             await session.send("启动超时")
+            return
 
 @on_command('stop', aliases=('关机',),
     permission=perm.SUPERUSER, only_to_me=True)
