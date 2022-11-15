@@ -17,6 +17,7 @@ import redis
 CWD = os.path.dirname(__file__)
 sys.path.append(CWD)
 from get_prefab_list import PREFABS
+from remote_command_patterns import PTNS, FIND_A_PLAYER_PATTERN as FPTN
 
 
 CONFIG = configparser.ConfigParser()
@@ -45,21 +46,16 @@ AUTH_PATTERN = re.compile("Client authenticated: \((?P<ku>[\w\d\-_]+)\) (?P<name
 IP_PATTERN = re.compile("New incoming connection (?P<ip>[\d+.]+)\|\d+ <(?P<uid>\d+)>$")
 START_TIME_PATTERN = re.compile("Current time: (?P<datetime>.+)")
 TIME_PATTERN = re.compile("^\[(?P<hour>\d+):(?P<minute>\d+):(?P<second>\d+)\]")
-CHAT_PATTERN = re.compile("\[(Say|Whisper)\] \((?P<ku>[A-Za-z0-9_]+)\) (?P<name>[^:]+): (?P<message>.*)$")
+CHAT_PATTERN = re.compile("\[(Say|Whisper)\] \((?P<ku>[A-Za-z0-9_-]+)\) (?P<name>[^:]+): (?P<message>.*)$")
 ROLLBACK_PATTERN = re.compile("Received world rollback request: count=(?P<count>\d+)")
+REMOTE_COMMAND_PATTERN = re.compile("\[\((?P<ku>[\w\d\-_]+)\) (?P<name>[^\]]+)\] ReceiveRemoteExecute\((?P<content>.+)\) @\((?P<cord>.+)\)")
 
 MESSAGE_FORMAT = "[{datetime}] ({username}): {msg}"
 _GET_SRVER_INFO_COMMAND = """
-print("---TheNet---");
 local json = string.format('"server_name": "%s", "max_players": "%s", "game_mode": "%s", ', TheNet:GetDefaultServerName(), TheNet:GetDefaultMaxPlayers(), TheNet:GetDefaultGameMode());
-print("---World State---");
-for k,v in pairs(TheWorld.state) do 
-    print(k,v);
-end;
 local status = string.format('"daysinseason": %s, "season": "%s", "days": %s, ', TheWorld.state.elapseddaysinseason, TheWorld.state.season, TheWorld.state.cycles);
 json = json..status;
 local players = {};
-print("---Client Table---");
 local gamers = "";
 for n, v in ipairs(TheNet:GetClientTable()) do 
     players[n] = {};
@@ -73,34 +69,14 @@ for n, v in ipairs(TheNet:GetClientTable()) do
     end
     players[n]["userid"] = v.userid; 
     players[n]["admin"] = v.admin;
-    print(n, v.name, v.prefab, v.playerage, v.steamid or v.netid, v.userid, v.admin, v.userflags);
     local gamer = string.format('{"name": "%s", "prefab": "%s", "playerage": %s, "steamid": "%s", "userid": "%s", "admin": %s}', v.name, v.prefab, v.playerage, tostring(v.steamid or v.netid), v.userid, tostring(v.admin));
     if n == 1 then
         gamers = gamers..gamer;
     else
         gamers = gamers..','..gamer;
     end;
-    if n > 1 then
-        print("---player in client table---");
-        for k, w in pairs(v) do
-            print(k, v);
-        end;
-    end;
 end;
 json = json..'"player_list":['..gamers..']';
-print("---Players---");
-print(string.format("number of players:%s", #AllPlayers));
-if #AllPlayers > 0 then
-    local player = AllPlayers[1];
-    print("---player---");
-    for k,v in pairs(player) do 
-        print(k, v);
-    end;
-    print("---components---");
-    for k,v in pairs(player.components) do 
-        print(k, v);
-    end;
-end;
 json = '{'..json..'}';
 print(string.format("[server status] %s", json));
 """
@@ -392,6 +368,16 @@ class LineHandler:
                     logger.info(msg)
                 else:
                     logger.debug(msg)
+        elif "ReceiveRemoteExecute" in content:
+            m = REMOTE_COMMAND_PATTERN.search(content)
+            if m:
+                logger.info(content)
+                ku = m.group("ku")
+                name = m.group("name")
+                content = m.group("content")
+                cord = m.group("cord")
+                cmd = self._translate_remote_command(content)
+                logger.info(f"[execute] [({ku}) {name}] {cmd} @({cord})")
         elif content.startswith("Starting Up"):
             self.starting = True
             self.phase = 0
@@ -502,8 +488,24 @@ class LineHandler:
             f"""季节: {season} {daysinseason}\n""" + \
             f"""版本: {self.version}"""
         if players:
-            info += "\n"+"玩家列表:\n"+ "\n  ".join(players)
+            info += "\n"+"玩家列表:\n  "+ "\n  ".join(players)
         return info
+    
+    @staticmethod
+    def _translate_remote_command(cmd):
+        for ptn_name, ptn in PTNS.items():
+            pattern = ptn['pattern']
+            match = pattern.search(cmd)
+            if match:
+                player_ku = None
+                if ptn.get("has_player"):
+                    match_player = FPTN.search(cmd)
+                    if match_player:
+                        player_ku = match_player.group("ku")
+                return f"{ptn_name}" + (f" on {player_ku}" if player_ku else "")
+        else:
+            return "unknown command pattern"
+
     
     @staticmethod
     def _extract_deltatime_from_line(line):
