@@ -8,6 +8,7 @@ import threading
 import re
 import datetime
 import logging
+import logging.handlers
 import json
 import sys
 import multiprocessing as mp
@@ -87,6 +88,11 @@ TZ = datetime.timezone(datetime.timedelta(hours=8), name="Asia/Shanghai")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
+logger.addHandler(logging.handlers.RotatingFileHandler(
+    filename=os.path.join(DONTSTARVE_DIR, 'mega_log.txt'),
+    maxBytes=20*1024*1024,
+    backupCount=10,
+))
 
 
 def start():
@@ -102,15 +108,19 @@ def start():
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf8")
     command_line[-1] = "Caves"
     cave_p = subprocess.Popen(command_line,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, encoding="utf8")
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf8")
     MR.lpush(REDIS_SERVER_STATE, "starting")
     logger.info("server subprocess start")
     t_send = threading.Thread(target=send_console_command, args=(master_p,))
     t_send.daemon = True
-    t_recieve = threading.Thread(target=get_output, args=(master_p,))
-    t_recieve.daemon = True
     t_send.start()
-    t_recieve.start()
+    t_recieve_m = threading.Thread(target=get_output, args=(master_p,))
+    t_recieve_m.daemon = True
+    t_recieve_m.start()
+    t_recieve_c = threading.Thread(target=get_output, 
+            args=(cave_p,), kwargs={"master": False})
+    t_recieve_c.daemon = True
+    t_recieve_c.start()
     stopped = False
     while True:
         if stopped: 
@@ -206,15 +216,20 @@ def send_console_command(popen):
         popen.stdin.flush()
         print("communicate complete")
 
-def get_output(popen):
+def get_output(popen, master=True):
     lh = LineHandler()
+    level = 'Master' if master else 'Caves'
     while True:
         try:
             out = popen.stdout.readline()
         except UnicodeDecodeError:
             continue
         else:
-            lh.handle(out)
+            if master:
+                lh.handle(out)
+            out = out.strip()
+            if out:
+                logger.info(f"[{level}]: {out}")
 
 def dummy_redis_dec(name):
     def _decorator(func):
