@@ -144,18 +144,18 @@ async def update(session):
     last_state = ""
     while True:
         state = await r.get(REDIS_UPDATE_STATE)
-        if state and "6" in state:
-            if last_state != state:
-                print(last_state, state)
-                last_state = state
+        if state: 
+            if "6" in state:
+                if last_state != state:
+                    print(last_state, state)
+                    last_state = state
+                    await session.send(state)
+            else:
                 await session.send(state)
-        else:
-            await session.send(state)
-            await r.close()
-            return
+                await r.close()
+                break
         await asyncio.sleep(0.2)
     await r.close()
-
 
 @on_command('version', aliases=('版本',), only_to_me=True)
 async def get_version(session):
