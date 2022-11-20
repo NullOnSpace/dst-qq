@@ -2,7 +2,7 @@ import configparser
 import os
 import os.path
 import subprocess
-from signal import SIGTERM, SIGINT
+from signal import SIGINT
 import time
 import threading
 import re
@@ -19,18 +19,9 @@ CWD = os.path.dirname(__file__)
 sys.path.append(CWD)
 from get_prefab_list import PREFABS
 from remote_command_patterns import PTNS, FIND_A_PLAYER_PATTERN as FPTN
+from get_config import STEAMCMD_DIR, INSTALL_DIR, DONTSTARVE_DIR, CLUSTER_NAME
 
 
-CONFIG = configparser.ConfigParser()
-CONFIG.read(os.path.join(CWD, "server.ini"))
-STEAM = CONFIG['steam']
-DONTSTARVE = CONFIG['dontstarve']
-
-HOME = STEAM['home']
-STEAMCMD_DIR = os.path.join(HOME, STEAM['steamcmd_dir'])
-INSTALL_DIR = os.path.join(HOME, DONTSTARVE['install_dir'])
-CLUSTER_NAME = DONTSTARVE['cluster_name']
-DONTSTARVE_DIR = os.path.join(HOME, DONTSTARVE['dontstarve_dir'])
 COMMAND = "dontstarve_dedicated_server_nullrenderer_x64"
 
 REDIS_SERVER_STATE = "dst:server:state"
@@ -42,6 +33,7 @@ REDIS_KU_LA = "dst:user:lastaccess"
 REDIS_CHAT = "dst:chat:sorted-set"
 REDIS_UPDATE_STATE = "dst:update:server"
 REDIS_QBOT_COMMAND = "dst:qbot:command"
+REDIS_TASK_KEY = 'DST:DAEMON:TASKS'
 
 AUTH_PATTERN = re.compile("Client authenticated: \((?P<ku>[\w\d\-_]+)\) (?P<name>.+)$")
 IP_PATTERN = re.compile("New incoming connection (?P<ip>[\d+.]+)\|\d+ <(?P<uid>\d+)>$")
@@ -427,6 +419,9 @@ class LineHandler:
         elif content.startswith("[Leave Announcement]"):
             update_info = True
         elif content.startswith("Serializing world"):
+            task = ('backup', 'backup_task_dummy_code')
+            task_json = json.dumps(task)
+            self.redis.rpush(REDIS_TASK_KEY, task_json)
             update_info = True
         elif content.startswith("[server status]"):
             status_json = content[16:]

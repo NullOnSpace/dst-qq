@@ -3,11 +3,8 @@ import json
 import hashlib
 import shutil
 
-import get_config
+from get_config import CLUSTER_DIR, BACKUP_DIR
 
-
-CLUSTER_DIR = get_config.CLUSTER_DIR
-BACKUP_DIR = get_config.BACKUP_DIR
 
 SESSION_PATH = 'save/session'
 BACK_UP_RECORD_PATH = os.path.join(BACKUP_DIR, 'record.json')
