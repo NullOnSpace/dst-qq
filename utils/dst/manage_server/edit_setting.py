@@ -1,57 +1,57 @@
 #!/usr/bin/env python3
 # edit cluster.ini
-"""
-todo:
-edit() 改为可从命令行读取参数
-添加成功反馈
-"""
 
 import configparser
 import os.path
 import sys
 
+CWD = os.path.dirname(__file__)
+sys.path.append(CWD)
+from get_config import CLUSTER_DIR
+
+CLUSTER_INI_PATH = os.path.join(CLUSTER_DIR, "cluster.ini")
 
 SETTING_DICT = {
     "GAMEPLAY": ("game_mode", "max_players", "pvp", "pause_when_empty"),
-    "NETWORK": ("cluster_description", "cluster_name", "cluster_intention", "cluster_password"),
+    "NETWORK": ("cluster_description", "cluster_name", "cluster_intention", "cluster_password", "cluster_language"),
     "MISC": ("console_enabled",),
     "SHARD": ("shard_enabled", "bind_ip", "master_ip", "master_port", "cluster_key"),
 }
-SETTING_MAP = {}
+SETTING_MAP = {}  # mapping option to its section
 for k, vs in SETTING_DICT.items():
     for v in vs:
         SETTING_MAP[v] = k
-CONFIG_SERVER = configparser.ConfigParser()
-CONFIG_SERVER.read("server.ini")
-try:
-    CLUSTER_DIR = os.path.join(
-        CONFIG_SERVER['steam']['home'],
-        CONFIG_SERVER['dontstarve']['dontstarve_dir'],
-        CONFIG_SERVER['dontstarve']['cluster_name'],
-        'cluster.ini'
-    )
-except KeyError as e:
-    print(f"{e} in edit_settings")
-    sys.exit(1)
-CONFIG_CLUSTER = configparser.ConfigParser()
-CONFIG_CLUSTER.read(CLUSTER_DIR)
 
-def print_config():
-    for section in CONFIG_CLUSTER:
-        for key in CONFIG_CLUSTER[section]:
-            print(f"{section}: {key}: {CONFIG_CLUSTER[section][key]}")
+def print_config(cluster_ini=CLUSTER_INI_PATH, exclude=('steam',)):
+    config = configparser.ConfigParser()
+    config.read(cluster_ini)
+    res = "服务器设置:"
+    for section in config:
+        if section not in exclude:
+            res += f"\n{section}"
+            for key in config[section]:
+                res += f"\n\t{key} = {config[section][key]}"
+    return res
 
-def edit(config, change, loc=CLUSTER_DIR):
+def edit(change, loc=CLUSTER_INI_PATH):
+    # read from `config_path` change option in `change` then write to `loc`
     # change should be a dict like {"cluster_name": "new name"}
+    config = configparser.ConfigParser()
+    config.read(loc)
+    errors = []
     for k, v in change.items():
         if k in SETTING_MAP:
             section = SETTING_MAP[k]
             config[section][k] = v
+        else:
+            errors.append(k)
     with open(loc, 'w') as fp:
         config.write(fp)
+    return errors
 
 def main():
-    edit(CONFIG_CLUSTER, {"cluster_name": "brand new world"})
+    edit({"cluster_name": "brand new world"})
+    print_config(CLUSTER_INI_PATH)
 
 
 if __name__ == '__main__':

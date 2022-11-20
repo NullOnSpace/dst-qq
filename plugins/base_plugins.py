@@ -144,7 +144,7 @@ async def update(session):
     last_state = ""
     while True:
         state = await r.get(REDIS_UPDATE_STATE)
-        if "6" in state:
+        if state and "6" in state:
             if last_state != state:
                 print(last_state, state)
                 last_state = state
@@ -369,4 +369,39 @@ async def upload(session):
                 shutil.rmtree(temp_dir)
                 break
     await session.send(msg)
-    
+
+
+@on_command('edit_cluster', aliases=('服务器设置',), only_to_me=True)
+async def search_prefab(session):
+    print("edit cluster ini")
+    HELP_MESSAGE = "输入 '/服务器设置 设置名 设置值' 来修改服务器设置"
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    option = session.current_arg_text.strip()
+    if option:
+        await session.send("正在处理...")
+        task_code = sha1(str(time.time()).encode()).hexdigest()
+        opt, val = option.split(" ", max_split=1)
+        task = ('edit_cluster', {opt: val}, task_code)
+        task_json = json.dumps(task)
+        await r.rpush(REDIS_TASK_KEY, task_json)
+        result_key = REDIS_TASK_RESULT_KEY_PREPEND + task_code
+        max_tries = 10
+        while True:
+            result_json = await r.get(result_key)
+            if result_json is None:
+                await asyncio.sleep(2)
+                max_tries -= 1
+                if max_tries <= 0:
+                    msg = "请求超时"
+                    break
+            else:
+                await r.delete(result_key)
+                errors = json.loads(result_json)
+                if errors:
+                    msg = " ".join(errors) + "不是可修改选项"
+                else:
+                    msg = "成功修改"
+                break
+    else:
+        msg = HELP_MESSAGE
+    await session.send(msg)

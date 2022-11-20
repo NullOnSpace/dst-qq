@@ -10,6 +10,7 @@ from manage_server.get_prefab_list import PREFABS, REVERSE_PREFABS
 from manage_server.manage_user import session_to_ku, ku_to_name
 from manage_server.archive_cluster import zip_cluster
 from manage_server.mega_backup import backup
+from manage_server.edit_setting import edit as _edit_cluster, print_config
 
 import redis
 
@@ -37,6 +38,13 @@ def upload_archive():
     result = zip_cluster(CLUSTER_DIR)
     return result
 
+def edit_cluster(option):
+    if option:
+        res = _edit_cluster(option)
+    else:
+        res = print_config()
+    return res
+
 
 def main():
     R = redis.Redis(decode_responses=True)
@@ -61,6 +69,7 @@ TASK_DICT = {
     'search_prefab': search_prefab,
     'upload_archive': upload_archive,
     'backup': backup,
+    'edit_cluster': edit_cluster,
 }
 
 if __name__ == "__main__":
