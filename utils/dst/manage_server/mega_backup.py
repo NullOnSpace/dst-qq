@@ -75,14 +75,17 @@ def compare(f1, f2):
 
 
 def compare_and_copy(src, dst):
-    if os.path.exists(dst):
-                same = compare(src, dst)
-                if same:
-                    return False
-    # not exists or not same
-    shutil.copy2(src, dst)
-    print(f"copy from{src} to {dst}")
-    return True
+    try:
+        if os.path.exists(dst):
+                    same = compare(src, dst)
+                    if same:
+                        return False
+        # not exists or not same
+        shutil.copy2(src, dst)
+        print(f"copy from{src} to {dst}")
+        return True
+    except FileNotFoundError:
+        return False
 
 
 if __name__ == "__main__":
