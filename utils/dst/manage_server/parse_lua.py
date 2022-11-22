@@ -11,7 +11,7 @@ sys.path.append(CWD)
 from get_config import SCRIPT_FILE
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler())
 logger.addHandler(logging.FileHandler("debug.log", mode="w"))
 
@@ -20,54 +20,19 @@ class LazyText(dict):
     ROOTS = {}
 
     def __new__(cls, msgctxt, *args, **kwargs):
-        logger.debug(f"handling new {msgctxt}")
-        if "." in msgctxt:
-            parts = msgctxt.split(".")
-            parent = None
-            for part in parts:
-                if parent is None:
-                    if part in cls.ROOTS:
-                        parent = cls.ROOTS[part]
-                    else:
-                        break
-                else:
-                    if parent.get(part):
-                        parent = parent[part]
-                    else:
-                        break
-            else:
-                logger.debug(f"existed: {msgctxt}")
-                return parent
-            logger.debug(f"generate new: {msgctxt} ")
-            return super().__new__(cls, msgctxt, *args, **kwargs)
-        else:
+        if "." not in msgctxt:
             if msgctxt in cls.ROOTS:
-                logger.debug(f"existed in ROOTS: {msgctxt}")
+                logger.debug(f"existed root: {msgctxt}")
                 return cls.ROOTS[msgctxt]
-            else:
-                logger.debug(f"generate new ROOT: {msgctxt}")
-                return super().__new__(cls, msgctxt, *args, **kwargs)
+        return super().__new__(cls, *args, **kwargs)
 
     def __init__(self, msgctxt, msgid=None, msgstr=None):
-        self.msgctxt = msgctxt
         if "." not in msgctxt:
+            # root node
             self.ROOTS[msgctxt] = self
-        else:
-            parts = msgctxt.split(".")
-            parent = None
-            for part in parts:
-                if parent is None:
-                    if part in self.ROOTS:
-                        parent = self.ROOTS[part]
-                    else:
-                        parent = LazyText(part)
-                        self.ROOTS[part] = parent
-                else:
-                    parent = parent.__getattr__(part)
-        if msgid is not None:
-            self.msgid = msgid
-        if msgstr is not None:
-            self.msgstr = msgstr
+        self.msgctxt = msgctxt
+        self.msgid = msgid
+        self.msgstr = msgstr
 
     def __getattr__(self, name):
         logger.debug(f"enter getattr: {name}")
@@ -77,11 +42,35 @@ class LazyText(dict):
         else:
             logger.debug(f"create new key {name} for {self}")
             self[name] = LazyText(f"{self.msgctxt}.{name}")
-            self.__setattr__(name, self[name])
             return self[name]
     
     def __str__(self):
         return self.msgctxt
+    
+    def translation(self):
+        with zipfile.ZipFile(SCRIPT_FILE) as zip:
+            content = zip.read("scripts/languages/chinese_s.po")
+        fp = io.StringIO(content.decode("utf8"))
+        found = False
+        msgid = ""
+        msgstr = ""
+        for idx, line in enumerate(fp, 1):
+            if not line.strip():
+                continue
+            if not (found or line.startswith("#.")):
+                continue
+            if line.startswith("#."):
+                if line[3:].strip() == self.msgctxt:
+                    found = True
+                    continue
+            if found:
+                if line.startswith("msgid"):
+                    msgid = line[6:].strip()[1:-1]
+                if line.startswith("msgstr"):
+                    msgstr = line[7:].strip()[1:-1]
+            if msgid and msgstr:
+                break
+        return msgstr
     
     @classmethod
     def load_strings(cls):
@@ -103,7 +92,15 @@ class LazyText(dict):
                     msgid = line.split(" ", maxsplit=1)[-1][1:-1]
                 elif line.startswith("msgstr"):
                     msgstr = line.split(" ", maxsplit=1)[-1][1:-1]
-                    LazyText(msgctxt, msgid=msgid, msgstr=msgstr)
+                    parts = msgctxt.split(".")
+                    parent = None
+                    for part in parts:
+                        if parent is None:
+                            parent = LazyText(part)
+                        else:
+                            parent = getattr(parent, part)
+                    parent.msgid = msgid
+                    parent.msgstr = msgstr
 
 
 class LuaDict(collections.OrderedDict):
@@ -772,4 +769,5 @@ def main():
 
 
 if __name__ == "__main__":
-    LazyText.load_strings()
+    STRINGS = LazyText("STRINGS")
+    print(STRINGS.NAMES.ACORN.translation())
