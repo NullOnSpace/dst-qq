@@ -426,7 +426,7 @@ async def search_prefab(session):
             order_by = ORDER_BY[order_by]
         elif not order_by:
             order_by = 'age'
-        task = ('search_prefab', task_code)
+        task = ('get_users_stat', task_code)
         task_json = json.dumps(task)
         await r.rpush(REDIS_TASK_KEY, task_json)
         result_key = REDIS_TASK_RESULT_KEY_PREPEND + task_code

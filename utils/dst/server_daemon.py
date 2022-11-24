@@ -96,6 +96,7 @@ TASK_DICT = {
     'upload_archive': upload_archive,
     'backup': backup,
     'edit_cluster': edit_cluster,
+    'get_users_stat': get_users_stat
 }
 
 if __name__ == "__main__":
