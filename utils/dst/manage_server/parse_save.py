@@ -339,9 +339,9 @@ def get_latest_save(user=False, cluster=CLUSTER_DIR):
             print(f'No such dir:{cluster_dir}')
     
     if user:
-        for user_session, user_etries in u.items():
-            if user_etries:
-                max_entry = max(user_etries, key=lambda x: x.stat().st_ctime)
+        for user_session, user_entries in u.items():
+            if user_entries:
+                max_entry = max(user_entries, key=lambda x: x.stat().st_ctime)
                 save['user'][user_session] = max_entry
     return save
 

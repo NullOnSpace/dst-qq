@@ -5,15 +5,20 @@ import collections
 import functools
 import zipfile
 import io
+import json
+
+import redis
 
 CWD = os.path.dirname(__file__)
 sys.path.append(CWD)
 from get_config import SCRIPT_FILE
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 logger.addHandler(logging.FileHandler("debug.log", mode="w"))
+
+REDIS_TRANSLATIONS_PREPEND = "dst:translation:"
 
 
 class LazyText(dict):
@@ -33,6 +38,7 @@ class LazyText(dict):
         self.msgctxt = msgctxt
         self.msgid = msgid
         self.msgstr = msgstr
+        self.translated = False
 
     def __getattr__(self, name):
         logger.debug(f"enter getattr: {name}")
@@ -45,35 +51,60 @@ class LazyText(dict):
             return self[name]
     
     def __str__(self):
-        return self.msgctxt
+        if not self.translated:
+            self.translation()
+        return self.msgid or self.msgctxt
+    
+    def __repr__(self):
+        return f"_('{self.__str__()}')"
+    
+    def __add__(self, other):
+        return str(self) + str(other)
+    
+    def __radd__(self, other):
+        return str(self) + str(other)
     
     def translation(self):
-        with zipfile.ZipFile(SCRIPT_FILE) as zip:
-            content = zip.read("scripts/languages/chinese_s.po")
-        fp = io.StringIO(content.decode("utf8"))
-        found = False
-        msgid = ""
-        msgstr = ""
-        for idx, line in enumerate(fp, 1):
-            if not line.strip():
-                continue
-            if not (found or line.startswith("#.")):
-                continue
-            if line.startswith("#."):
-                if line[3:].strip() == self.msgctxt:
-                    found = True
+        if "." not in self.msgctxt:
+            self.translated = True
+            return self.msgctxt
+        R = redis.Redis()
+        name, key = self.msgctxt.rsplit(".", maxsplit=1)
+        value = R.hget(REDIS_TRANSLATIONS_PREPEND+name, key)
+        if value:
+            value_ = json.loads(value)
+            msgid = value_["msgid"]
+            msgstr = value_["msgstr"]
+        else:
+            with zipfile.ZipFile(SCRIPT_FILE) as zip:
+                content = zip.read("scripts/languages/chinese_s.po")
+            fp = io.StringIO(content.decode("utf8"))
+            found = False
+            msgid = ""
+            msgstr = ""
+            for idx, line in enumerate(fp, 1):
+                if not line.strip():
                     continue
-            if found:
-                if line.startswith("msgid"):
-                    msgid = line[6:].strip()[1:-1]
-                if line.startswith("msgstr"):
-                    msgstr = line[7:].strip()[1:-1]
-            if msgid and msgstr:
-                break
-        return msgstr
+                if not (found or line.startswith("#.")):
+                    continue
+                if line.startswith("#."):
+                    if line[3:].strip() == self.msgctxt:
+                        found = True
+                        continue
+                if found:
+                    if line.startswith("msgid"):
+                        msgid = line[6:].strip()[1:-1]
+                    if line.startswith("msgstr"):
+                        msgstr = line[7:].strip()[1:-1]
+                if msgid and msgstr:
+                    break
+        self.msgid = msgid
+        self.msgstr = msgstr
+        self.translated = True
     
     @classmethod
     def load_strings(cls):
+        R = redis.Redis()
         with zipfile.ZipFile(SCRIPT_FILE) as zip:
             content = zip.read("scripts/languages/chinese_s.po")
         fp = io.StringIO(content.decode("utf8"))
@@ -92,20 +123,26 @@ class LazyText(dict):
                     msgid = line.split(" ", maxsplit=1)[-1][1:-1]
                 elif line.startswith("msgstr"):
                     msgstr = line.split(" ", maxsplit=1)[-1][1:-1]
-                    parts = msgctxt.split(".")
-                    parent = None
-                    for part in parts:
-                        if parent is None:
-                            parent = LazyText(part)
-                        else:
-                            parent = getattr(parent, part)
-                    parent.msgid = msgid
-                    parent.msgstr = msgstr
+                    name, key = msgctxt.rsplit(".", maxsplit=1)
+                    value = json.dumps(dict(msgid=msgid, msgstr=msgstr))
+                    R.hset(REDIS_TRANSLATIONS_PREPEND+name, key, value)
+                    # parent = None
+                    # for part in parts:
+                    #     if parent is None:
+                    #         parent = LazyText(part)
+                    #     else:
+                    #         parent = getattr(parent, part)
+                    # parent.msgid = msgid
+                    # parent.msgstr = msgstr
+        R.close()
 
 
 class LuaDict(collections.OrderedDict):
     def __getattr__(self, name):
         return self[name]
+    
+    def __repr__(self):
+        return dict.__repr__(self)
 
 
 class LuaList(list):
@@ -148,12 +185,17 @@ class LUAParser:
         partial = ""
         prepartial = ""
         for i, line in enumerate(lua_file):
-            if line.strip().startswith("--"):  # comment but later take quoted into account
+            if line.strip().startswith("--"):  
+                pass # comment but later take quoted "--" into account
                 continue
             if i < start_line:
                 continue
             if (end_line and i > end_line) or end_cond(line):
                 break
+            line_comment_idx = line.find("--")
+            if line_comment_idx != -1:
+                # inline line comment
+                line = line[:line_comment_idx-1]
             if not_complete:
                 partial = partial + line
                 try:
@@ -213,7 +255,8 @@ class LUAParser:
             last_value, last_type = id_stash[-1]
             if last_type == "i":  # a.property = value 
                 lbo = self.parse_identifier(list(zip(*id_stash[:-2]))[0])
-                assert id_stash[-2][0] == ".", f"assign value property pattern wrong in {id_stash}"
+                assert id_stash[-2][0] == ".", \
+                        f"assign value property pattern wrong in {id_stash}"
                 setattr(lbo, last_value, value)
             elif last_type == "[":  # a["item"] = value
                 lbo = self.parse_identifier(list(zip(*id_stash[:-1]))[0])
@@ -769,5 +812,4 @@ def main():
 
 
 if __name__ == "__main__":
-    STRINGS = LazyText("STRINGS")
-    print(STRINGS.NAMES.ACORN.translation())
+    main()

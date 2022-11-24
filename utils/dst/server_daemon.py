@@ -11,11 +11,37 @@ from manage_server.manage_user import session_to_ku, ku_to_name
 from manage_server.archive_cluster import zip_cluster
 from manage_server.mega_backup import backup
 from manage_server.edit_setting import edit as _edit_cluster, print_config
+from manage_server.parse_save import get_latest_save, parse_user
+from manage_server.manage_user import session_to_ku, ku_to_name
 
 import redis
 
 REDIS_TASK_KEY = 'DST:DAEMON:TASKS'
 REDIS_TASK_RESULT_KEY_PREPEND = 'DST:DAEMON:TASK_DONE:'
+
+def get_users_stat():
+    # user statistics of time, prefab, is_alive
+    saves = get_latest_save(user=True)
+    users = saves['user']
+    result = []
+    for user_session, entry in users.items():
+        userdata = parse_user(entry.path)
+        if userdata:
+            try:
+                data = userdata['data']
+                age = data['age']['age']
+                is_alive = not data.get('is_ghost')
+            except KeyError:
+                continue
+            else:
+                ku = session_to_ku(user_session)
+                username = ku_to_name(ku)
+                last_login = entry.stat().st_mtime
+                stat = {
+                    'username': username, 'ku': ku, 
+                    'age': age, 'is_alive': is_alive, 'last_login': last_login}
+                result.append(stat)
+    return result
 
 def search_prefab(search_word):
     if search_word in REVERSE_PREFABS:
@@ -73,7 +99,8 @@ TASK_DICT = {
 }
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("Daemon Exit")
+    # try:
+    #     main()
+    # except KeyboardInterrupt:
+    #     print("Daemon Exit")
+    print(get_users_stat())

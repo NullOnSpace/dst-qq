@@ -6,6 +6,7 @@ import asyncio
 import json
 from hashlib import sha1
 import time
+import datetime
 import os
 import shutil
 
@@ -404,4 +405,56 @@ async def search_prefab(session):
                 break
     else:
         msg = HELP_MESSAGE
+    await session.send(msg)
+
+@on_command('player', aliases=('玩家',), only_to_me=True)
+async def search_prefab(session):
+    print("player statistics")
+    ORDER_BY = {
+        '时长': 'age',
+        '时间': 'last_login'
+    }
+    HELP = "输入 '/玩家 排序依据' 来查看玩家统计 排序依据有 '时长' '时间' 默认时长"
+    PLAYER_FMT = "{ku}: [{username}] {age}天 [{last_login}]"
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    order_by = session.current_arg_text.strip()
+    if not order_by or \
+            order_by in ORDER_BY.keys() or order_by in ORDER_BY.values():
+        await session.send("正在处理...")
+        task_code = sha1(str(time.time()).encode()).hexdigest()
+        if order_by in ORDER_BY:
+            order_by = ORDER_BY[order_by]
+        elif not order_by:
+            order_by = 'age'
+        task = ('search_prefab', task_code)
+        task_json = json.dumps(task)
+        await r.rpush(REDIS_TASK_KEY, task_json)
+        result_key = REDIS_TASK_RESULT_KEY_PREPEND + task_code
+        max_tries = 10
+        while True:
+            result_json = await r.get(result_key)
+            if result_json is None:
+                await asyncio.sleep(2)
+                max_tries -= 1
+                if max_tries <= 0:
+                    msg = "请求超时"
+                    break
+            else:
+                await r.delete(result_key)
+                result = json.loads(result_json)
+                msg = ""
+                players = sorted(result, key=lambda x: x[order_by])[:15]
+                for player in players:
+                    dt = datetime.datetime.fromtimestamp(player['last_login'])
+                    last_login = dt.strftime("%m-%d %H:%M")
+                    msg += PLAYER_FMT.format(
+                        ku=player['ku'], username=player['username'],
+                        age=player['age']//480+1, last_login=last_login,
+                    )
+                    if not player['is_alive']:
+                        msg += " :("
+                    msg += "\n"
+                break
+    else:
+        msg = HELP
     await session.send(msg)
