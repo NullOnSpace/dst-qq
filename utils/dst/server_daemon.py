@@ -99,8 +99,7 @@ TASK_DICT = {
 }
 
 if __name__ == "__main__":
-    # try:
-    #     main()
-    # except KeyboardInterrupt:
-    #     print("Daemon Exit")
-    print(get_users_stat())
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Daemon Exit")
