@@ -415,7 +415,7 @@ async def search_prefab(session):
         '时间': 'last_login'
     }
     HELP = "输入 '/玩家 排序依据' 来查看玩家统计 排序依据有 '时长' '时间' 默认时长"
-    PLAYER_FMT = "({ku}) {age:>4}天 [{last_login}]\n[{username:>16}]"
+    PLAYER_FMT = "{ku} {age:>4}天 [{last_login}]\n[{username}]"
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     order_by = session.current_arg_text.strip()
     if (not order_by) or \
