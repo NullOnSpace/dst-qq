@@ -453,7 +453,7 @@ async def search_prefab(session):
                         age=int(player['age']//480+1), last_login=last_login,
                     )
                     if not player['is_alive']:
-                        msg += " :("
+                        msg += "\u2620"
                     msg += "\n"
                 break
     else:
