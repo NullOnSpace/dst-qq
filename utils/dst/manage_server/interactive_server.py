@@ -533,6 +533,7 @@ def main():
     while True:
         logger.info("listening for request")
         _, msg = R.brpop(REDIS_QBOT_COMMAND)
+        logger.info(f"get qbot command {msg}")
         if msg == "start":
             if p_server is None or not p_server.is_alive():
                 p_server = mp.Process(target=start)
