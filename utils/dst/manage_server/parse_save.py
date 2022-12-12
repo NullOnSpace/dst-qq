@@ -1,38 +1,36 @@
 import os
 import sys
-import pprint
 
 cwd = os.path.dirname(__file__)
 sys.path.append(cwd)
-from get_config import CLUSTER_DIR
-from mega_backup import HEX_STR
 import parse_lua
-
+from get_config import CLUSTER_DIR
 
 MAP_ENTS = (
     (  
     # level 1 important
-    'hermit_crab',
-    'antlion_spawner',
+    # non creature
+    'saltstack',
+    'moonrockseed',
     'resurrectionstone',
+    'waterplant',
+    'oceantree',
     'oasislake',
-    'beequeenhive',
-    'crabking_spawner',
-    'crabking',
+    'lava_pond',
+    'pond',
+    'critterlab',
     'monkeyisland_portal',
-    'dragonfly_spawner',
+    'watertree_pillar',
+    'oceantree_pillar',
     'pigking',
-    'moonbase',
-    'hermithouse_construction1',
-    'hermithouse_construction2',
-    'hermithouse_construction3',
-    'walrus_camp',
     'monkeyqueen',
+    'moonbase',
     'multiplayer_portal',
     'multiplayer_portal_moonrock',
     'wormhole',
     'cave_entrance',
     'cave_entrance_open',
+    'moon_altar_icon',
     "moon_altar_rock_glass",
     "moon_altar_rock_seed",
     "moon_altar_rock_idol",
@@ -40,12 +38,33 @@ MAP_ENTS = (
     "moon_altar_astral_marker_2",
     'oceanfish_shoalspawner',
     'townportal',
+    'charlie_stage_post',
+    'charlie_lecturn',
+    'eyeturrent',
+    'statueharp_hedgespawner',
+    'rock1',
+    'rock2',
+    'boat',
+    # den
+    'terrarium',
+    'walrus_camp',
+    'hermit_crab',
+    'hermithouse',
+    'hermithouse_construction1',
+    'hermithouse_construction2',
+    'hermithouse_construction3',
+    'antlion_spawner',
+    'beequeenhive',
+    'crabking_spawner',
+    'crabking',
     'moose',
     'mooseegg',
     'deerclop',
     'bearger',
-    'charlie_stage_post',
-    'statueharp_hedgespawner',
+    'beehive',
+    'wasphive',
+    'buzzardspawner',
+    'pighouse',
     # Caves
     # "ancient_altar_broken_ruinsrespawner_inst",
     # "ruins_statue_mage_nogem_ruinsrespawner_inst",
@@ -63,7 +82,7 @@ MAP_ENTS = (
     # "atrium_statue",
     # "spawnpoint_multiplayer", same as cave_exit
     "archive_portal",
-    "archive_switch_base",
+    # "archive_switch_base",
     # "archive_orchestrina_main",
     # "archive_switch",
     # "archive_orchestrina_small",
@@ -72,7 +91,6 @@ MAP_ENTS = (
     "archive_cookpot",
     # "ancient_altar_ruinsrespawner_inst",
     # "archive_ambient_sfx",
-    "firepit",
     "minotaurchest",
     # "insanityrock",
     # "sanityrock",
@@ -88,14 +106,20 @@ MAP_ENTS = (
     # level 2 normal
     # structures
     'birdcage',
-    # 'mermhouse_crafted',
     'seafaring_prototyper',
     'tent',
-    'researchlab1',
+    'researchlab',
     'researchlab2',
     'researchlab3',
     'researchlab4',
     'firepit',
+    'dragonflyfurnace',
+    'lightningrod',
+    'beebox',
+    'magician_chest',
+    'firesuppressor',
+    'mermhouse_crafted',
+    'mermwatchtower',
     ),
 )
 
@@ -111,8 +135,10 @@ def parse(save_file, ents_level=0, extra_ents={}, jump_keys={}):
     jump = False
     for line in save_file:
         line = line.strip()
-        if line.startswith("local") or line.startswith("end"):
+        if line.startswith("local"):
             continue
+        if line.startswith("end"):
+            obj = lp.explain(content)
         elif line.startswith("tablefunctions"):
             fn_name = line.split('"')[1]
             if fn_name in jump_keys:
@@ -121,18 +147,15 @@ def parse(save_file, ents_level=0, extra_ents={}, jump_keys={}):
                 if fn_name[5:-3] not in wanted_ents:
                     jump = True
         elif line.startswith("return"):
+            content = ""
             if line[6:].strip().startswith("savedata"):
                 break
             if jump:
                 obj = []
-                jump = False
                 continue
             content = line[6:]
-            # if len(content) > 16000:
-            #     obj = {"obj": fn_name}
-            # else:
-            obj = lp.explain(content)
         elif line.startswith("savedata"):
+            jump = False
             l, r = line.split("=", maxsplit=1)
             if "tablefunctions" not in r:
                 # special cond for "savedata = {}"
@@ -150,14 +173,19 @@ def parse(save_file, ents_level=0, extra_ents={}, jump_keys={}):
                     else:
                         data[k] = {}
                         data = data[k]
-            data[keys[-1]] = obj
+            if obj is not None:
+                data[keys[-1]] = obj
+        else:
+            if jump:
+                continue
+            content += line
     return savedata
 
 
 def parse_user(save_file):
     with open(save_file, 'rb') as fp:
         # print(f"parse user in file {save_file}")
-        bline = fp.readline()
+        bline = fp.read()
         line = bline.decode(encoding='utf8', errors='ignore')
     lp = parse_lua.LUAParser(global_=parse_lua.LUA_BUILTINS)
     idx = line.find('return')
@@ -230,8 +258,8 @@ def main():
                 zs.add(z)
     print("max x:", max(xs), "min x:", min(xs))
     print("max z:", max(zs), "min z:", min(zs))
-    from draw_map import draw_ents, draw_background, draw_nodes, draw_roads, \
-        draw_tiles
+    from draw_map import (draw_background, draw_ents, draw_nodes, draw_roads,
+                          draw_tiles)
     im = None
     tiles = parse_map_nav(savedata['map']['tiles'])
     height = savedata['map']['height']
@@ -296,7 +324,7 @@ def merge_ents(*ents_list):
     ents_dict = {}
     for ents in ents_list:
         for k, v in ents.items():
-            if k in ents_dict:
+            if ents_dict.get(k):
                 ents_dict[k] = ents_dict[k] + v
             else:
                 ents_dict[k] = v
@@ -365,7 +393,7 @@ def countprefab(prefab, cluster_dir):
     """
     :param last_check: timestamp that last check these things
     """
-    from get_progress import merge_container, CONTAINERS
+    from get_progress import CONTAINERS, merge_container
     result = {'user':{}}
     save = get_latest_save(user=True, cluster=cluster_dir)
     master_entry = save.get('Master')
@@ -392,5 +420,8 @@ def countprefab(prefab, cluster_dir):
     return result
 
 if __name__ == "__main__":
-    main()
-
+    d = parse_user(os.path.join(cwd, "temp/user_raw_0000000530"))
+    from edit_level import puralize
+    import pprint
+    data = puralize(d)
+    pprint.pprint(data, indent=2)

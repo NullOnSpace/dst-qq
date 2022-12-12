@@ -233,9 +233,10 @@ async def rollback(session):
         await session.send(f"正尝试回档 {days}")
         rb = False
         while True:
-            state_tp = await r.brpop(REDIS_SERVER_STATE, timeout=30)
+            state_tp = await r.brpop(REDIS_SERVER_STATE, timeout=45)
             if state_tp is None:
                 await session.send("回档超时")
+                r.close()
                 return
             else:
                 state = state_tp[1]
@@ -247,9 +248,12 @@ async def rollback(session):
             else:
                 if state == "running":
                     await session.send("回档完成")
-                    break
+                    r.close()
+                    return
     else:
         await session.send(HELP_MESSAGE)
+        r.close()
+    return 
 
 @on_command('regen', aliases=('重置',), only_to_me=True, 
         permission=perm.SUPERUSER)
@@ -455,6 +459,7 @@ async def search_prefab(session):
                     if not player['is_alive']:
                         msg += "\u2620"
                     msg += "\n"
+                msg = msg or "没有信息"
                 break
     else:
         msg = HELP

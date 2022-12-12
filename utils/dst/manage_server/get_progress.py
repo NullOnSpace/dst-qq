@@ -4,7 +4,7 @@ import sys
 
 cwd = os.path.dirname(__file__)
 sys.path.append(cwd)
-from parse_save import parse, merge_ents
+from parse_save import parse, merge_ents, get_latest_save
 from parse_lua import LuaDict, LuaList
 
 ENTS = {
@@ -75,10 +75,9 @@ CONTAINERS = {
     'archive_cookpot',
     'minotaurchest',
     'backpack',
-    # 'pandoraschest',
     'treasurechest',
     'sacred_chest',
-    'seed_pouch',
+    'seedpouch',
     "dragonflychest",
     'mushroom_light2',
     'portablecookpot',
@@ -91,7 +90,30 @@ CONTAINERS = {
     "chester",
     "terrariumchest",
     "saltbox",
+    "shadow_container",
+    "supertacklecontainer",
+    # temp unwanted
+    # 'pandoraschest',
     # "underwater_salvageable",
+
+
+    # MOD medal things 
+    "medal_resonator_item",
+    "medal_cookpot",
+    "medal_livingroot_chest",
+    "spices_box",
+    "multivariate_certificate",
+    "large_multivariate_certificate",
+    "medal_spacetime_chest",
+    "medal_krampus_chest_item",
+    "medal_ammo_box",
+
+    # MOD legion things
+    "backcub",
+    "hiddenmoonlight",
+    "revolvedmoonlight_pro",
+    "revolvedmoonlight_item",
+    "boltwingout",
 }
 
 
@@ -126,7 +148,8 @@ def merge_container(ents):
                 try:
                     items = container['data']['container']['items']
                 except KeyError as e:
-                    print(f"unfound key in container:{container} ERROR: {e}")
+                    print(f"unfound key in container {container_name}"
+                        f": {container} ERROR: {e}")
                     continue
                 for item in items:
                     if item is None:
@@ -232,16 +255,19 @@ def get_line_process(line, top=False):
     return line_results
 
 def main():
-    save_file_master = os.path.join(cwd, 'temp/000002')
-    save_file_cave = os.path.join(cwd, 'temp/000002_cave')
+    saves = get_latest_save()
+    save_file_master = saves['Master']
+    save_file_cave = saves['Caves']
     with open(save_file_master, 'r') as fp:
         savedata = parse(fp, extra_ents=ENTS.union(CONTAINERS))
     content_data = merge_container(savedata['ents'])
-    ents1 = merge_ents(content_data, savedata['ents'])
+    ents1 = merge_ents(content_data, 
+        {k: v for k, v in savedata['ents'].items() if v})
     with open(save_file_cave, 'r') as fp:
         savedata = parse(fp, extra_ents=ENTS.union(CONTAINERS))
     content_data = merge_container(savedata['ents'])
-    ents2 = merge_ents(content_data, savedata['ents'])
+    ents2 = merge_ents(content_data, 
+        {k: v for k, v in savedata['ents'].items() if v})
     ents = merge_ents(ents1, ents2)
     result = get_progress_celestial_line(ents)
     print(result)

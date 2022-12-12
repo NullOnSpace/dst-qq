@@ -34,6 +34,7 @@ REDIS_CHAT = "dst:chat:sorted-set"
 REDIS_UPDATE_STATE = "dst:update:server"
 REDIS_QBOT_COMMAND = "dst:qbot:command"
 REDIS_TASK_KEY = 'DST:DAEMON:TASKS'
+REDIS_PREFABS = 'dst:data:prefabs'
 
 AUTH_PATTERN = re.compile("Client authenticated: \((?P<ku>[\w\d\-_]+)\) (?P<name>.+)$")
 IP_PATTERN = re.compile("New incoming connection (?P<ip>[\d+.]+)\|\d+ <(?P<uid>\d+)>$")
@@ -74,6 +75,7 @@ json = '{'..json..'}';
 print(string.format("[server status] %s", json));
 """
 GET_SERVER_INFO_COMMAND = " ".join(_GET_SRVER_INFO_COMMAND.split("\n"))
+GET_PREFABS_COMMAND = """for k, v in pairs(STRINGS.NAMES) do print(string.format("[prefab] %s:%s", k, v)) end"""
 
 TZ = datetime.timezone(datetime.timedelta(hours=8), name="Asia/Shanghai")
 
@@ -295,6 +297,7 @@ class LineHandler:
                 logger.info("start up success")
                 self.starting = False
                 self.redis.lpush(REDIS_CONSOLE_COMAND, GET_SERVER_INFO_COMMAND)
+                self.redis.lpush(REDIS_CONSOLE_COMAND, GET_PREFABS_COMMAND)
             elif "ERROR" in line:
                 logger.error(f"STARTUP ERROR: {line}")
                 self.redis.lpush(REDIS_SERVER_STATE, "ERROR")
@@ -433,6 +436,11 @@ class LineHandler:
             else:
                 print(info)
                 self.redis.set(REDIS_SERVER_INFO, info, ex=2100)
+        elif content.startswith("[prefab]"):
+            prefab_def = content[9:]
+            prefab, name = prefab_def.strip().split(":")
+            if name:
+                self.redis.hset(REDIS_PREFABS, prefab, name)
         else:
             pass
         if update_info:

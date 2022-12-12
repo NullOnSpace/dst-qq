@@ -182,11 +182,18 @@ class LUAParser:
         """:end_cond: a function takes line as arg and return T if needs end else False
         """
         not_complete = False  # True when need a } or ) in following lines to end
+        block_comment = False
         partial = ""
         prepartial = ""
         for i, line in enumerate(lua_file):
-            if line.strip().startswith("--"):  
+            if block_comment:
+                if line.strip().endswith("]]"):
+                    block_comment = False
+                continue
+            if line.strip().startswith("--"):
                 pass # comment but later take quoted "--" into account
+                if line.strip().startswith("--[["):
+                    block_comment = True
                 continue
             if i < start_line:
                 continue
@@ -195,9 +202,13 @@ class LUAParser:
             line_comment_idx = line.find("--")
             if line_comment_idx != -1:
                 # inline line comment
-                line = line[:line_comment_idx-1]
+                line = line[:line_comment_idx]
+            if line.strip().endswith(";"):
+                line = line.strip()[:-1]+","
             if not_complete:
-                partial = partial + line
+                partial = partial + line.strip()
+                if "}" not in line and ")" not in line:
+                    continue
                 try:
                     fetch_end(partial)
                 except LookupError:
@@ -207,12 +218,31 @@ class LUAParser:
                     line = prepartial + partial
             else:
                 line = line.rstrip()
-                if line and line[-1] in ("{", "("):  
-                    pass  # quoted { or ( not included
-                    prepartial = line[:-1]
-                    partial = line[-1]
-                    not_complete = True
+                if not line:
                     continue
+                quoted = False
+                not_complete = 0
+                if line.endswith("="):
+                    not_complete = True
+                    prepartial = line
+                    partial = ""
+                    continue
+                for idx, ch in enumerate(line):
+                    if ch in ("'", '"') and not quoted:
+                        q = ch
+                        quoted = True
+                    elif quoted and ch == q:
+                        if not _is_backslashed(line[:idx]):
+                            quoted = False
+                    elif not quoted and ch in ("{", "("):
+                        prepartial = line[:idx]
+                        partial = line[idx:]
+                        not_complete += 1
+                    elif not quoted and ch in ("}", ")"):
+                        not_complete -= 1
+                else:
+                    if not_complete:
+                        continue
             self.parse_lua_line(line)
 
     def parse_lua_line(self, line):
@@ -328,10 +358,25 @@ class LUAParser:
                 value = ".."
                 type_ = "con"  # con for str concate
                 rest = s[2:]
-            else:
+            elif s[1] not in "1234567890":
                 value = "."
                 type_ = "."  # ask for property
                 rest = s[1:]
+            else:
+                # .12 number
+                num = ""
+                for n in s[1:]:
+                    if n in "0123456789":
+                        num += n
+                    elif n == 'e':
+                        num += 'e'
+                    elif n == '-' and num[-1] == 'e':
+                        num += '-'
+                    else:
+                        break
+                value = float("."+num)
+                type_ = "n"
+                rest = s[len(num)+1:]
         elif s[0] == ":":
             value = ":"
             type_ = "call"  # call a member function
@@ -339,12 +384,14 @@ class LUAParser:
         elif s[0] == ",":
             type_ = value = ","
             rest = s[1:]
+        else:
+            print(f"unparsed: {s}")
         return value, type_, rest
     
-    def explain(self, s):
+    def explain(self, s_):
         # parse an expression to value
-        logger.debug(f"explaining: {s}")
-        s = s.strip()
+        logger.debug(f"explaining: {s_}")
+        s = s_.strip()
         parsed = []
         id_waiting = False
         while s:
@@ -509,12 +556,18 @@ class LUAParser:
         logger.debug(f"parse --{id_list}-- into: --{value}--")
         return value
     
+
     def get_value(self, s):
         # return s identifier's value follow LEGB rules
         return self.global_[s]
                         
     def parse_arguements(self, s):
         # parse s into args and kwargs
+        if s.strip().startswith("{"):
+            value = self.explain(s)
+            args = [value,]
+            kwargs = {}
+            return args, kwargs
         unparsed_args = s.split(",")
         args = []
         kwargs = {}
@@ -654,6 +707,7 @@ def fetch_end(s):
     """after meeting '{', '"', "'", "(", find the matching one 
     and return the content and its wrapping
     """
+    logger.debug(f"fetch end for {s[:6]}...{s[-6:]}:{len(s)}chars {s.count(chr(10))}lines")
     bracket_dict = { "{": "}", "(": ")", "[": "]"}
     start = s[0]
     rest = s[1:]
@@ -699,6 +753,41 @@ def fetch_end(s):
     else:
         raise ValueError(f"wrong start to find a match: {s[:5]}...")
 
+
+def is_end(line):
+    opened = False
+    # first strip all quoted str
+    while True:
+        for ch in line:
+            if ch in ('"', "'"):
+                idx1 = line.find(ch)
+                rest = line[idx1+1:]
+                idx2 = rest.find(ch)
+                while True:
+                    if _is_backslashed(rest[:idx2]):
+                        rest_ = rest[idx2+1:]
+                        idx2 = rest_.find(ch) + idx2 + 1
+                    else:
+                        break
+                line = line[:idx1] + line[idx1+idx2+2:]
+                break
+        else:
+            break
+    closed = 0
+    for ch in line:
+        if ch in ("{", "("):
+            closed += 1
+        elif ch in ("}", ")"):
+            closed -= 1
+    return not closed
+
+
+def _is_backslashed(line):
+    if (len(line) - len(line.rstrip("\\")))%2 == 0:
+        return False
+    else:
+        return True
+    
 
 def read_a_word(s):
     """fetch a word from given s and return the word and rest part
@@ -812,4 +901,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with open(os.path.join(CWD, "temp/0000000038")) as fp:
+        lp = LUAParser(global_=LUA_BUILTINS)
+        lp.parse_lua(fp)
+        print(lp.global_['__rt'])

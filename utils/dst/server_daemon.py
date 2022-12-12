@@ -18,6 +18,7 @@ import redis
 
 REDIS_TASK_KEY = 'DST:DAEMON:TASKS'
 REDIS_TASK_RESULT_KEY_PREPEND = 'DST:DAEMON:TASK_DONE:'
+REDIS_PREFABS = 'dst:data:prefabs'
 
 def get_users_stat():
     # user statistics of time, prefab, is_alive
@@ -44,6 +45,16 @@ def get_users_stat():
     return result
 
 def search_prefab(search_word):
+    r = redis.Redis(decode_responses=True)
+    prefabs = r.hgetall(REDIS_PREFABS)
+    for k, v in prefabs.items():
+        prefab = k.lower()
+        if prefab not in PREFABS:
+            PREFABS[prefab] = v
+            if v in REVERSE_PREFABS:
+                REVERSE_PREFABS[v].append(prefab)
+            else:
+                REVERSE_PREFABS[v] = [prefab,]
     if search_word in REVERSE_PREFABS:
         prefabs = REVERSE_PREFABS[search_word]
         if len(prefabs) > 1:
