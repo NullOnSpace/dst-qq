@@ -212,7 +212,9 @@ async def search_prefab(session):
                 break
     else:
         msg = HELP_MESSAGE
-    await session.send(msg)
+    print(f"send msg length: {len(msg)}")
+    ret = await session.send(msg)
+    print(f"send msg result: {ret}")
 
 @on_command('rollback', aliases=('回档',), only_to_me=True, 
         permission=perm.SUPERUSER)
@@ -377,7 +379,7 @@ async def upload(session):
 
 
 @on_command('edit_cluster', aliases=('服务器设置',), only_to_me=True)
-async def search_prefab(session):
+async def edit_cluster(session):
     print("edit cluster ini")
     HELP_MESSAGE = "输入 '/服务器设置 设置名 设置值' 来修改服务器设置"
     r = aioredis.from_url("redis://localhost", decode_responses=True)
