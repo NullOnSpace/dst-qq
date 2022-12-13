@@ -45,6 +45,29 @@ STATE_DICT = {
 }
 
 
+async def split_send_msg(session, msg):
+    print(f"msg len: {len(msg)}")
+    ret = await session.send(msg)
+    print(f"send msg result: {ret}")
+    if ret is None:
+        # send msg failed
+        # split and send
+        lines = msg.split("\n")
+        throat = 130
+        msg_slice_list = []
+        for line in lines:
+            msg_slice_list.append(line)
+            msg_slice = "\n".join(msg_slice_list)
+            if len(msg_slice) > throat:
+                msg_slice = "\n".join(msg_slice_list[:-1])
+                await session.send(msg_slice)
+                msg_slice_list = [line,]
+        else:
+            if msg_slice_list:
+                msg_slice = "\n".join(msg_slice_list)
+                await session.send(msg_slice)
+
+
 @on_command('quest', aliases=('旧查服',), only_to_me=True)
 async def quest(session):
     servers = await get_server()
@@ -212,9 +235,7 @@ async def search_prefab(session):
                 break
     else:
         msg = HELP_MESSAGE
-    print(f"send msg length: {len(msg)}")
-    ret = await session.send(msg)
-    print(f"send msg result: {ret}")
+    await split_send_msg(msg)
 
 @on_command('rollback', aliases=('回档',), only_to_me=True, 
         permission=perm.SUPERUSER)
