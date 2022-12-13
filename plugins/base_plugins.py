@@ -340,7 +340,7 @@ async def chat(session):
         )
         await r.hset(REDIS_CHAT_LAST_FETCH, field, time.time())
         if msgs:
-            await session.send("\n".join(msgs))
+            await split_send_msg(session, "\n".join(msgs))
         else:
             await session.send("没有更多的新消息了")
 
@@ -486,4 +486,4 @@ async def search_prefab(session):
                 break
     else:
         msg = HELP
-    await session.send(msg)
+    await split_send_msg(session, msg)
