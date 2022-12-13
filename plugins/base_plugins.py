@@ -235,7 +235,7 @@ async def search_prefab(session):
                 break
     else:
         msg = HELP_MESSAGE
-    await split_send_msg(msg)
+    await split_send_msg(session, msg)
 
 @on_command('rollback', aliases=('回档',), only_to_me=True, 
         permission=perm.SUPERUSER)
