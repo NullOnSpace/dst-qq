@@ -53,7 +53,7 @@ async def split_send_msg(session, msg):
         # send msg failed
         # split and send
         lines = msg.split("\n")
-        throat = 130
+        throat = 100
         msg_slice_list = []
         for line in lines:
             msg_slice_list.append(line)
