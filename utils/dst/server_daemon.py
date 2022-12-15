@@ -6,7 +6,7 @@ CWD = os.path.dirname(__file__)
 sys.path.append(CWD)
 from manage_server.get_config import CLUSTER_DIR
 from manage_server.parse_save import countprefab
-from manage_server.get_prefab_list import PREFABS, REVERSE_PREFABS
+from manage_server.get_prefab_list import PREFABS, update as update_prefabs, get_reverse_prefabs
 from manage_server.manage_user import session_to_ku, ku_to_name
 from manage_server.archive_cluster import zip_cluster
 from manage_server.mega_backup import backup
@@ -45,18 +45,10 @@ def get_users_stat():
     return result
 
 def search_prefab(search_word):
-    r = redis.Redis(decode_responses=True)
-    prefabs = r.hgetall(REDIS_PREFABS)
-    for k, v in prefabs.items():
-        prefab = k.lower()
-        if prefab not in PREFABS:
-            PREFABS[prefab] = v
-            if v in REVERSE_PREFABS:
-                REVERSE_PREFABS[v].append(prefab)
-            else:
-                REVERSE_PREFABS[v] = [prefab,]
-    if search_word in REVERSE_PREFABS:
-        prefabs = REVERSE_PREFABS[search_word]
+    update_prefabs()
+    reverse_prefabs = get_reverse_prefabs()
+    if search_word in reverse_prefabs:
+        prefabs = reverse_prefabs[search_word]
         if len(prefabs) > 1:
             return {}
         else:
