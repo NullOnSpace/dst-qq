@@ -20,6 +20,7 @@ sys.path.append(CWD)
 from get_prefab_list import PREFABS
 from remote_command_patterns import PTNS, FIND_A_PLAYER_PATTERN as FPTN
 from get_config import STEAMCMD_DIR, INSTALL_DIR, DONTSTARVE_DIR, CLUSTER_NAME
+from edit_mod import add_server_mod_to_auto_update
 
 
 COMMAND = "dontstarve_dedicated_server_nullrenderer_x64"
@@ -98,6 +99,7 @@ def start():
     command_line = [cmd, "-cluster", CLUSTER_NAME, "-shard", "Master"]
     MR.delete(REDIS_SERVER_COMMAND)
     MR.delete(REDIS_SERVER_STATE)
+    add_server_mod_to_auto_update()
     master_p = subprocess.Popen(command_line, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf8")
     command_line[-1] = "Caves"
