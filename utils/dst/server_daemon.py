@@ -53,7 +53,7 @@ def search_prefab(search_word):
             return {}
         else:
             search_word = prefabs[0]
-    if search_word in PREFABS:
+    if search_word in PREFABS or all(map(lambda x: ord(x)<128, search_word)):
         prefab = search_word
         result = countprefab(prefab, CLUSTER_DIR)
         r = {ku_to_name(session_to_ku(k)): v 
