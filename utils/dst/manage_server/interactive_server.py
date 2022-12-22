@@ -29,6 +29,7 @@ REDIS_SERVER_STATE = "dst:server:state"
 REDIS_SERVER_COMMAND = "dst:server:command"
 REDIS_SERVER_INFO = "dst:server:info"
 REDIS_CONSOLE_COMAND = "dst:server:console:command"
+REDIS_CONSOLE_COMAND_CAVE = "dst:server:console:command:cave"
 REDIS_KU_MAPPING = "dst:user:ku"
 REDIS_KU_LA = "dst:user:lastaccess"
 REDIS_CHAT = "dst:chat:sorted-set"
@@ -103,13 +104,17 @@ def start():
     master_p = subprocess.Popen(command_line, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf8")
     command_line[-1] = "Caves"
-    cave_p = subprocess.Popen(command_line,
+    cave_p = subprocess.Popen(command_line, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf8")
     MR.lpush(REDIS_SERVER_STATE, "starting")
     logger.info("server subprocess start")
-    t_send = threading.Thread(target=send_console_command, args=(master_p,))
-    t_send.daemon = True
-    t_send.start()
+    t_send_m = threading.Thread(target=send_console_command, args=(master_p,))
+    t_send_m.daemon = True
+    t_send_m.start()
+    t_send_c = threading.Thread(target=send_console_command, 
+            args=(cave_p, REDIS_CONSOLE_COMAND_CAVE))
+    t_send_c.daemon = True
+    t_send_c.start()
     t_recieve_m = threading.Thread(target=get_output, args=(master_p,))
     t_recieve_m.daemon = True
     t_recieve_m.start()
@@ -202,11 +207,11 @@ def stop():
     r = redis.Redis(decode_responses=True)
     r.set(REDIS_SERVER_COMMAND, "stop")
 
-def send_console_command(popen):
+def send_console_command(popen, key=REDIS_CONSOLE_COMAND):
     MR = redis.Redis(decode_responses=True)
-    MR.delete(REDIS_CONSOLE_COMAND)
+    MR.delete(key)
     while True:
-        msg = MR.brpop(REDIS_CONSOLE_COMAND)[1]
+        msg = MR.brpop(key)[1]
         logger.info(f'console get msg: {msg}')
         popen.stdin.write(msg+'\n')
         popen.stdin.flush()

@@ -19,6 +19,33 @@ import redis
 REDIS_TASK_KEY = 'DST:DAEMON:TASKS'
 REDIS_TASK_RESULT_KEY_PREPEND = 'DST:DAEMON:TASK_DONE:'
 REDIS_PREFABS = 'dst:data:prefabs'
+REDIS_CONSOLE_COMAND = "dst:server:console:command"
+REDIS_CONSOLE_COMAND_CAVE = "dst:server:console:command:cave"
+
+DROP_COMMAND_TPL = 'local p = UserToPlayer("{ku}");if p ~= nil then p.components.inventory:DropEverything() end'
+BAN_COMMAND_TPL = 'TheNet:Ban("{ku}")'
+KICK_COMMAND_TPL = 'TheNet:Kick("{ku}", {seconds})'
+
+
+def drop_player_everything(ku):
+    r = redis.Redis(decode_responses=True)
+    r.lpush(REDIS_CONSOLE_COMAND, DROP_COMMAND_TPL.format(ku=ku))
+    r.lpush(REDIS_CONSOLE_COMAND_CAVE, DROP_COMMAND_TPL.format(ku=ku))
+    r.close()
+
+def ban_player(ku):
+    r = redis.Redis(decode_responses=True)
+    drop_player_everything(ku)
+    r.lpush(REDIS_CONSOLE_COMAND, BAN_COMMAND_TPL.format(ku=ku))
+    r.close()
+
+def kick_player(ku, kick_seconds=10*60):
+    r = redis.Redis(decode_responses=True)
+    drop_player_everything(ku)
+    r.lpush(REDIS_CONSOLE_COMAND, 
+            KICK_COMMAND_TPL.format(ku=ku, seconds=kick_seconds))
+    r.close()
+
 
 def get_users_stat():
     # user statistics of time, prefab, is_alive
@@ -99,7 +126,10 @@ TASK_DICT = {
     'upload_archive': upload_archive,
     'backup': backup,
     'edit_cluster': edit_cluster,
-    'get_users_stat': get_users_stat
+    'get_users_stat': get_users_stat,
+    'ban': ban_player,
+    'kick': kick_player,
+    'drop': drop_player_everything,
 }
 
 if __name__ == "__main__":

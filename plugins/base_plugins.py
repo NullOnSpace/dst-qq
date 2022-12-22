@@ -9,6 +9,7 @@ import time
 import datetime
 import os
 import shutil
+import string
 
 from utils.dst.get_server_list_aio import get_server, get_server_detail
 from utils.dst.get_versions import aio_get_latest_version
@@ -22,6 +23,7 @@ STRING_MODEL = """服务器名: \n\t{server_name}
 天数: {day}
 版本: {version}
 """
+KU_STR = string.ascii_letters + string.digits + "_-"
 
 REDIS_QBOT_COMMAND = "dst:qbot:command"
 REDIS_SERVER_STATE = "dst:server:state"
@@ -45,7 +47,7 @@ STATE_DICT = {
 }
 
 
-async def split_send_msg(session, msg):
+async def split_send_msg(session: CommandSession, msg: str):
     print(f"msg len: {len(msg)}")
     ret = await session.send(msg)
     print(f"send msg result: {ret}")
@@ -69,7 +71,7 @@ async def split_send_msg(session, msg):
 
 
 @on_command('quest', aliases=('旧查服',), only_to_me=True)
-async def quest(session):
+async def quest(session: CommandSession):
     servers = await get_server()
     server_list = servers['List']
     reports = []
@@ -97,7 +99,7 @@ async def quest(session):
     await session.send(r)
 
 @on_command('info', aliases=('服务器状态', '查服'), only_to_me=True)
-async def info(session):
+async def info(session: CommandSession):
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     i = await r.get(REDIS_SERVER_INFO)
     if i:
@@ -107,7 +109,7 @@ async def info(session):
 
 @on_command('start', aliases=('启动',),
     permission=perm.SUPERUSER, only_to_me=True)
-async def start(session):
+async def start(session: CommandSession):
     print("start")
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     await r.delete(REDIS_SERVER_STATE)
@@ -140,7 +142,7 @@ async def start(session):
 
 @on_command('stop', aliases=('关机',),
     permission=perm.SUPERUSER, only_to_me=True)
-async def stop(session):
+async def stop(session: CommandSession):
     print("stop")
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     await r.lpush(REDIS_QBOT_COMMAND, 'stop')
@@ -159,7 +161,7 @@ async def stop(session):
 
 @on_command('update', aliases=('更新',),
     permission=perm.SUPERUSER, only_to_me=True)
-async def update(session):
+async def update(session: CommandSession):
     print("update")
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     await r.delete(REDIS_UPDATE_STATE)
@@ -182,7 +184,7 @@ async def update(session):
     await r.close()
 
 @on_command('version', aliases=('版本',), only_to_me=True)
-async def get_version(session):
+async def get_version(session: CommandSession):
     print("get version")
     HELP_MESSAGE = "输入 '/版本 正式' 或 '/版本 测试'"
     meta_info = session.current_arg_text.strip()
@@ -196,7 +198,7 @@ async def get_version(session):
 
 
 @on_command('search', aliases=('查找',), only_to_me=True)
-async def search_prefab(session):
+async def search_prefab(session: CommandSession):
     print("search prefab")
     HELP_MESSAGE = "输入 '/查找 物品名' 来查看物品数量"
     r = aioredis.from_url("redis://localhost", decode_responses=True)
@@ -237,9 +239,10 @@ async def search_prefab(session):
         msg = HELP_MESSAGE
     await split_send_msg(session, msg)
 
+
 @on_command('rollback', aliases=('回档',), only_to_me=True, 
         permission=perm.SUPERUSER)
-async def rollback(session):
+async def rollback(session: CommandSession):
     print("rollback")
     HELP_MESSAGE = "输入 '/回档 天数'如 '/回档 2' 来回档 一次最多3天"
     r = aioredis.from_url("redis://localhost", decode_responses=True)
@@ -278,9 +281,10 @@ async def rollback(session):
         r.close()
     return 
 
+
 @on_command('regen', aliases=('重置',), only_to_me=True, 
         permission=perm.SUPERUSER)
-async def regen(session):
+async def regen(session: CommandSession):
     print("regenerate world")
     HELP_MESSAGE = "输入 '/重置' 来重置世界"
     r = aioredis.from_url("redis://localhost", decode_responses=True)
@@ -305,18 +309,20 @@ async def regen(session):
                 await session.send("重置完成")
                 break
 
+
 @on_command('chat', aliases=('聊天',), only_to_me=True)
-async def chat(session):
+async def chat(session: CommandSession):
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     msg = session.current_arg_text.strip()
     ctx = session.ctx
     message_type = ctx['message_type']
     sender = ctx['sender']
+    msg_len_limit = 50
     print(dict(ctx.items()))
     if msg:
         # send msg to server
-        if len(msg) > 30:
-            await session.send(f"消息过长 请在30字以内")
+        if len(msg) > msg_len_limit:
+            await session.send(f"消息过长 请在{msg_len_limit}字以内")
             return
         if message_type == 'group':
             nickname = sender.get("card") or sender.get("nickname")
@@ -347,7 +353,7 @@ async def chat(session):
 
 @on_command('upload', aliases=('归档',), 
         permission=perm.SUPERUSER, only_to_me=True)
-async def upload(session):
+async def upload(session: CommandSession):
     print("upload archive")
     HELP_MESSAGE = "在群内输入 '/归档' 上传归档和地图到群文件"
     ctx = session.ctx
@@ -399,8 +405,9 @@ async def upload(session):
     await session.send(msg)
 
 
-@on_command('edit_cluster', aliases=('服务器设置',), only_to_me=True)
-async def edit_cluster(session):
+@on_command('edit_cluster', aliases=('服务器设置',),
+        permission=perm.SUPERUSER, only_to_me=True)
+async def edit_cluster(session: CommandSession):
     print("edit cluster ini")
     HELP_MESSAGE = "输入 '/服务器设置 设置名 设置值' 来修改服务器设置"
     r = aioredis.from_url("redis://localhost", decode_responses=True)
@@ -434,8 +441,9 @@ async def edit_cluster(session):
         msg = HELP_MESSAGE
     await session.send(msg)
 
+
 @on_command('player', aliases=('玩家',), only_to_me=True)
-async def search_prefab(session):
+async def search_prefab(session: CommandSession):
     print("player statistics")
     ORDER_BY = {
         '时长': 'age',
@@ -487,3 +495,93 @@ async def search_prefab(session):
     else:
         msg = HELP
     await split_send_msg(session, msg)
+
+
+@on_command('drop', aliases=('掉落',), 
+        permission=perm.SUPERUSER, only_to_me=True)
+async def drop_player(session: CommandSession):
+    print("drop player")
+    HELP_MESSAGE = "输入 '/掉落 玩家KU' 来使玩家物品掉落"
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    ku_raw = session.current_arg_text.strip()
+    if ku_raw:
+        ku = puralize_ku(ku_raw)
+        if ku is None:
+            await session.send(f"无效的KU: {ku_raw}")
+            return
+        task_code = sha1(str(time.time()).encode()).hexdigest()
+        task = ('drop', ku, task_code)
+        task_json = json.dumps(task)
+        await r.rpush(REDIS_TASK_KEY, task_json)
+        msg = f"掉落[{ku}]的物品"
+    else:
+        msg = HELP_MESSAGE
+    await session.send(msg)
+
+
+@on_command('kick', aliases=('踢',), 
+        permission=perm.SUPERUSER, only_to_me=True)
+async def kick_player(session: CommandSession):
+    print("kick player")
+    HELP_MESSAGE = "输入 '/踢 玩家KU 秒数' 来将玩家踢出房间一段时间 默认10分钟"
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    text = session.current_arg_text.strip()
+    if text:
+        seconds = 10*60
+        if " " in text:
+            parts = text.split(" ")
+            ku_raw = parts[0]
+            seconds_str = parts[-1]
+            if seconds_str.isdigit():
+                seconds = int(seconds_str)
+        else:
+            ku_raw = text
+        ku = puralize_ku(ku_raw)
+        if ku is None:
+            await session.send(f"无效的KU: {ku_raw}")
+            return
+        task_code = sha1(str(time.time()).encode()).hexdigest()
+        task = ('kick', ku, seconds, task_code)
+        task_json = json.dumps(task)
+        await r.rpush(REDIS_TASK_KEY, task_json)
+        msg = f"将[{ku}]踢出房间 {seconds}秒"
+    else:
+        msg = HELP_MESSAGE
+    await session.send(msg)
+
+
+@on_command('ban', aliases=('禁',), 
+        permission=perm.SUPERUSER, only_to_me=True)
+async def ban_player(session: CommandSession):
+    print("ban player")
+    HELP_MESSAGE = "输入 '/禁 玩家KU' 来禁止玩家在房间游戏"
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    ku_raw = session.current_arg_text.strip()
+    if ku_raw:
+        ku = puralize_ku(ku_raw)
+        if ku is None:
+            await session.send(f"无效的KU: {ku_raw}")
+            return
+        task_code = sha1(str(time.time()).encode()).hexdigest()
+        task = ('ban', ku, task_code)
+        task_json = json.dumps(task)
+        await r.rpush(REDIS_TASK_KEY, task_json)
+        msg = f"禁止[{ku}]在本房间游戏"
+    else:
+        msg = HELP_MESSAGE
+    await session.send(msg)
+
+
+def puralize_ku(ku_origin: str):
+    if len(ku_origin) == 11 and ku_origin.startswith("KU_"):
+        if all(map(lambda x: x in KU_STR, ku_origin)):
+            return ku_origin
+    elif len(ku_origin) == 10 and ku_origin.startswith("KU"):
+        if all(map(lambda x: x in KU_STR, ku_origin)):
+            ku = ku_origin[:2] + "_" + ku_origin[2:]
+            return ku
+    elif len(ku_origin) == 8:
+        if all(map(lambda x: x in KU_STR, ku_origin)):
+            ku = "KU_" + ku_origin
+            return ku
+    return None

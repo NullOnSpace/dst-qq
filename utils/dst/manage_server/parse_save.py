@@ -390,9 +390,6 @@ def _fetch_lastest_save(save_dir):
 
 
 def countprefab(prefab, cluster_dir):
-    """
-    :param last_check: timestamp that last check these things
-    """
     from get_progress import CONTAINERS, merge_container
     result = {'user':{}}
     save = get_latest_save(user=True, cluster=cluster_dir)
