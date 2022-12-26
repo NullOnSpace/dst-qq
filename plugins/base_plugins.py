@@ -14,6 +14,8 @@ import string
 from utils.dst.get_server_list_aio import get_server, get_server_detail
 from utils.dst.get_versions import aio_get_latest_version
 from . import customize_strings as cs
+from config import ADMINS
+from .custmize_permission import check_permission
 
 
 HOST = "KU_3RvV9haR"
@@ -47,6 +49,8 @@ STATE_DICT = {
 }
 
 
+# helper functions
+
 async def split_send_msg(session: CommandSession, msg: str):
     print(f"msg len: {len(msg)}")
     ret = await session.send(msg)
@@ -69,8 +73,24 @@ async def split_send_msg(session: CommandSession, msg: str):
                 msg_slice = "\n".join(msg_slice_list)
                 await session.send(msg_slice)
 
+def puralize_ku(ku_origin: str):
+    if len(ku_origin) == 11 and ku_origin.startswith("KU_"):
+        if all(map(lambda x: x in KU_STR, ku_origin)):
+            return ku_origin
+    elif len(ku_origin) == 10 and ku_origin.startswith("KU"):
+        if all(map(lambda x: x in KU_STR, ku_origin)):
+            ku = ku_origin[:2] + "_" + ku_origin[2:]
+            return ku
+    elif len(ku_origin) == 8:
+        if all(map(lambda x: x in KU_STR, ku_origin)):
+            ku = "KU_" + ku_origin
+            return ku
+    return None
 
-@on_command('quest', aliases=('旧查服',), only_to_me=True)
+
+# commands without any perm
+
+@on_command('quest', aliases=('查全服',), only_to_me=True)
 async def quest(session: CommandSession):
     servers = await get_server()
     server_list = servers['List']
@@ -98,7 +118,7 @@ async def quest(session: CommandSession):
     r = '-----------\n'.join(reports) or "没有找到服务器涅"
     await session.send(r)
 
-@on_command('info', aliases=('服务器状态', '查服'), only_to_me=True)
+@on_command('info', aliases=('查服',), only_to_me=True)
 async def info(session: CommandSession):
     r = aioredis.from_url("redis://localhost", decode_responses=True)
     i = await r.get(REDIS_SERVER_INFO)
@@ -106,82 +126,6 @@ async def info(session: CommandSession):
         await session.send(i)
     else:
         await session.send("查询不到服务器")
-
-@on_command('start', aliases=('启动',),
-    permission=perm.SUPERUSER, only_to_me=True)
-async def start(session: CommandSession):
-    print("start")
-    r = aioredis.from_url("redis://localhost", decode_responses=True)
-    await r.delete(REDIS_SERVER_STATE)
-    await r.lpush(REDIS_QBOT_COMMAND, 'start')
-    last_state = ""
-    starting_strings = []
-    t_start = time.time()
-    timeout = 100
-    while True:
-        _, state = await r.brpop(REDIS_SERVER_STATE)
-        if last_state != state:
-            t_start = time.time()
-            print(f"last: {last_state}, current: {state}")
-            last_state = state
-            if "/" in state:
-                order, total = state.split("/")
-                if not starting_strings:
-                    starting_strings = cs.give_some_startings(int(total))
-                s = starting_strings[int(order)-1]
-                await session.send(f"{s}...{state}")
-            elif state in ('idle', 'starting'):
-                await session.send(STATE_DICT[state])
-            else:
-                await session.send(STATE_DICT[state])
-                await r.close()
-                return
-        if time.time() - t_start > timeout:
-            await session.send("启动超时")
-            return
-
-@on_command('stop', aliases=('关机',),
-    permission=perm.SUPERUSER, only_to_me=True)
-async def stop(session: CommandSession):
-    print("stop")
-    r = aioredis.from_url("redis://localhost", decode_responses=True)
-    await r.lpush(REDIS_QBOT_COMMAND, 'stop')
-    await session.send("正在关机")
-    t_start = time.time()
-    timeout = 30
-    while True:
-        if time.time() - t_start > timeout:
-            await session.send("关机超时")
-            break
-        _, server_status = await r.brpop(REDIS_SERVER_STATE)
-        if server_status == "idle":
-            await session.send("已关闭")
-            break
-    await r.close()
-
-@on_command('update', aliases=('更新',),
-    permission=perm.SUPERUSER, only_to_me=True)
-async def update(session: CommandSession):
-    print("update")
-    r = aioredis.from_url("redis://localhost", decode_responses=True)
-    await r.delete(REDIS_UPDATE_STATE)
-    await r.lpush(REDIS_QBOT_COMMAND, 'update')
-    await session.send("updating")
-    last_state = ""
-    while True:
-        state = await r.get(REDIS_UPDATE_STATE)
-        if state: 
-            if "6" in state:
-                if last_state != state:
-                    print(last_state, state)
-                    last_state = state
-                    await session.send(state)
-            else:
-                await session.send(state)
-                await r.close()
-                break
-        await asyncio.sleep(0.2)
-    await r.close()
 
 @on_command('version', aliases=('版本',), only_to_me=True)
 async def get_version(session: CommandSession):
@@ -195,7 +139,6 @@ async def get_version(session: CommandSession):
     else:
         msg = HELP_MESSAGE
     await session.send(msg)
-
 
 @on_command('search', aliases=('查找',), only_to_me=True)
 async def search_prefab(session: CommandSession):
@@ -239,77 +182,6 @@ async def search_prefab(session: CommandSession):
         msg = HELP_MESSAGE
     await split_send_msg(session, msg)
 
-
-@on_command('rollback', aliases=('回档',), only_to_me=True, 
-        permission=perm.SUPERUSER)
-async def rollback(session: CommandSession):
-    print("rollback")
-    HELP_MESSAGE = "输入 '/回档 天数'如 '/回档 2' 来回档 一次最多3天"
-    r = aioredis.from_url("redis://localhost", decode_responses=True)
-    days_str = session.current_arg_text.strip()
-    if days_str.isdigit():
-        days = int(days_str)
-    elif days_str == "":
-        days = 0
-    else:
-        days = -99999
-    if days >= 0 and days <= 3:
-        await r.delete(REDIS_SERVER_STATE)
-        await r.lpush(REDIS_CONSOLE_COMAND, f"c_rollback({days})")
-        await session.send(f"正尝试回档 {days}")
-        rb = False
-        while True:
-            state_tp = await r.brpop(REDIS_SERVER_STATE, timeout=45)
-            if state_tp is None:
-                await session.send("回档超时")
-                r.close()
-                return
-            else:
-                state = state_tp[1]
-                print(f"get state:{state} in rollback polling")
-            if rb is False:
-                if state == "rollback":
-                    rb = True
-                    await session.send(f"开始回档")
-            else:
-                if state == "running":
-                    await session.send("回档完成")
-                    r.close()
-                    return
-    else:
-        await session.send(HELP_MESSAGE)
-        r.close()
-    return 
-
-
-@on_command('regen', aliases=('重置',), only_to_me=True, 
-        permission=perm.SUPERUSER)
-async def regen(session: CommandSession):
-    print("regenerate world")
-    HELP_MESSAGE = "输入 '/重置' 来重置世界"
-    r = aioredis.from_url("redis://localhost", decode_responses=True)
-    await r.delete(REDIS_SERVER_STATE)
-    await r.lpush(REDIS_CONSOLE_COMAND, f"c_regenerateworld()")
-    await session.send(f"正尝试重置世界")
-    rg = False
-    while True:
-        state_tp = await r.brpop(REDIS_SERVER_STATE, timeout=50)
-        if state_tp is None:
-            await session.send("重置超时")
-            return
-        else:
-            state = state_tp[1]
-            print(f"get state:{state} in regenerate polling")
-        if rg is False:
-            if state == "regenerate":
-                rg = True
-                await session.send(f"开始重置")
-        else:
-            if state == "running":
-                await session.send("重置完成")
-                break
-
-
 @on_command('chat', aliases=('聊天',), only_to_me=True)
 async def chat(session: CommandSession):
     r = aioredis.from_url("redis://localhost", decode_responses=True)
@@ -350,100 +222,8 @@ async def chat(session: CommandSession):
         else:
             await session.send("没有更多的新消息了")
 
-
-@on_command('upload', aliases=('归档',), 
-        permission=perm.SUPERUSER, only_to_me=True)
-async def upload(session: CommandSession):
-    print("upload archive")
-    HELP_MESSAGE = "在群内输入 '/归档' 上传归档和地图到群文件"
-    ctx = session.ctx
-    msg_type = ctx['message_type']
-    if msg_type != "group":
-        msg = HELP_MESSAGE
-    else:
-        group_id = ctx['group_id']
-        r = aioredis.from_url("redis://localhost", decode_responses=True)
-        await session.send("正在处理...")
-        task_code = sha1(str(time.time()).encode()).hexdigest()
-        task = ('upload_archive', task_code)
-        task_json = json.dumps(task)
-        await r.rpush(REDIS_TASK_KEY, task_json)
-        result_key = REDIS_TASK_RESULT_KEY_PREPEND + task_code
-        max_tries = 120
-        while True:
-            result_json = await r.get(result_key)
-            if result_json is None:
-                await asyncio.sleep(2)
-                max_tries -= 1
-                if max_tries <= 0:
-                    msg = "请求超时"
-                    break
-            else:
-                await r.delete(result_key)
-                result = json.loads(result_json)
-                print(f"receive result {result}")
-                maps = result['maps']
-                file_7z = result['7z']
-                temp_dir = result['temp_dir']
-                try:
-                    await session.bot.call_action('upload_group_file', 
-                        group_id=group_id, file=file_7z, 
-                        name=file_7z.split("/")[-1],
-                    )
-                    for map in maps:
-                        await session.bot.call_action('upload_group_file', 
-                            group_id=group_id, file=map, 
-                            name=map.split("/")[-1],
-                        )
-                except ActionFailed:
-                    msg = "上传失败"
-                else:
-                    msg = "上传成功"
-                os.remove(file_7z)
-                shutil.rmtree(temp_dir)
-                break
-    await session.send(msg)
-
-
-@on_command('edit_cluster', aliases=('服务器设置',),
-        permission=perm.SUPERUSER, only_to_me=True)
-async def edit_cluster(session: CommandSession):
-    print("edit cluster ini")
-    HELP_MESSAGE = "输入 '/服务器设置 设置名 设置值' 来修改服务器设置"
-    r = aioredis.from_url("redis://localhost", decode_responses=True)
-    option = session.current_arg_text.strip()
-    if option:
-        await session.send("正在处理...")
-        task_code = sha1(str(time.time()).encode()).hexdigest()
-        opt, val = option.split(" ", max_split=1)
-        task = ('edit_cluster', {opt: val}, task_code)
-        task_json = json.dumps(task)
-        await r.rpush(REDIS_TASK_KEY, task_json)
-        result_key = REDIS_TASK_RESULT_KEY_PREPEND + task_code
-        max_tries = 10
-        while True:
-            result_json = await r.get(result_key)
-            if result_json is None:
-                await asyncio.sleep(2)
-                max_tries -= 1
-                if max_tries <= 0:
-                    msg = "请求超时"
-                    break
-            else:
-                await r.delete(result_key)
-                errors = json.loads(result_json)
-                if errors:
-                    msg = " ".join(errors) + "不是可修改选项"
-                else:
-                    msg = "成功修改"
-                break
-    else:
-        msg = HELP_MESSAGE
-    await session.send(msg)
-
-
 @on_command('player', aliases=('玩家',), only_to_me=True)
-async def search_prefab(session: CommandSession):
+async def player_statistics(session: CommandSession):
     print("player statistics")
     ORDER_BY = {
         '时长': 'age',
@@ -496,9 +276,210 @@ async def search_prefab(session: CommandSession):
         msg = HELP
     await split_send_msg(session, msg)
 
+@on_command('admin', aliases=('管理员',), only_to_me=True)
+async def get_admin(session: CommandSession):
+    HELP = "在群内输入 '/管理员' 查看该群内管理员"
+    ctx = session.ctx
+    msg_type = ctx['message_type']
+    FMT = " {user_id}: [{username}]\n"
+    # user_id =  ctx['user_id']
+    if msg_type == "group":
+        group_id = ctx['group_id']
+        rt = await session.bot.call_action('get_group_member_list', 
+                        group_id=group_id,
+                    )
+        print(f"testing: {rt}")
+        group_dict = {i['user_id']: i for i in rt}
+        msg = ""
+        for user_id in sorted(ADMINS):
+            if user_id in group_dict:
+                info = group_dict[user_id]
+                user_name = info['card'] or info['nickname']
+                msg += FMT.format(
+                    user_id=user_id, username=user_name)
+        if msg:
+            msg = "管理员:\n" + msg
+        else:
+            msg = "没有管理员"
+    else:
+        msg = HELP
+    await split_send_msg(session, msg)
 
-@on_command('drop', aliases=('掉落',), 
-        permission=perm.SUPERUSER, only_to_me=True)
+
+# commands with admin perms
+
+@on_command('start', aliases=('启动',), only_to_me=True)
+@check_permission('admin')
+async def start(session: CommandSession):
+    print("start")
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    await r.delete(REDIS_SERVER_STATE)
+    await r.lpush(REDIS_QBOT_COMMAND, 'start')
+    last_state = ""
+    starting_strings = []
+    t_start = time.time()
+    timeout = 100
+    while True:
+        _, state = await r.brpop(REDIS_SERVER_STATE)
+        if last_state != state:
+            t_start = time.time()
+            print(f"last: {last_state}, current: {state}")
+            last_state = state
+            if "/" in state:
+                order, total = state.split("/")
+                if not starting_strings:
+                    starting_strings = cs.give_some_startings(int(total))
+                s = starting_strings[int(order)-1]
+                await session.send(f"{s}...{state}")
+            elif state in ('idle', 'starting'):
+                await session.send(STATE_DICT[state])
+            else:
+                await session.send(STATE_DICT[state])
+                await r.close()
+                return
+        if time.time() - t_start > timeout:
+            await session.send("启动超时")
+            return
+
+@on_command('stop', aliases=('关机',), only_to_me=True)
+@check_permission('admin')
+async def stop(session: CommandSession):
+    print("stop")
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    await r.lpush(REDIS_QBOT_COMMAND, 'stop')
+    await session.send("正在关机")
+    t_start = time.time()
+    timeout = 30
+    while True:
+        if time.time() - t_start > timeout:
+            await session.send("关机超时")
+            break
+        _, server_status = await r.brpop(REDIS_SERVER_STATE)
+        if server_status == "idle":
+            await session.send("已关闭")
+            break
+    await r.close()
+
+@on_command('update', aliases=('更新',), only_to_me=True)
+@check_permission('admin')
+async def update(session: CommandSession):
+    print("update")
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    await r.delete(REDIS_UPDATE_STATE)
+    await r.lpush(REDIS_QBOT_COMMAND, 'update')
+    await session.send("updating")
+    last_state = ""
+    while True:
+        state = await r.get(REDIS_UPDATE_STATE)
+        if state: 
+            if "6" in state:
+                if last_state != state:
+                    print(last_state, state)
+                    last_state = state
+                    await session.send(state)
+            else:
+                await session.send(state)
+                await r.close()
+                break
+        await asyncio.sleep(0.2)
+    await r.close()
+
+@on_command('rollback', aliases=('回档',), only_to_me=True)
+@check_permission('admin')
+async def rollback(session: CommandSession):
+    print("rollback")
+    HELP_MESSAGE = "输入 '/回档 天数'如 '/回档 2' 来回档 一次最多3天"
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    days_str = session.current_arg_text.strip()
+    if days_str.isdigit():
+        days = int(days_str)
+    elif days_str == "":
+        days = 0
+    else:
+        days = -99999
+    if days >= 0 and days <= 3:
+        await r.delete(REDIS_SERVER_STATE)
+        await r.lpush(REDIS_CONSOLE_COMAND, f"c_rollback({days})")
+        await session.send(f"正尝试回档 {days}")
+        rb = False
+        while True:
+            state_tp = await r.brpop(REDIS_SERVER_STATE, timeout=45)
+            if state_tp is None:
+                await session.send("回档超时")
+                r.close()
+                return
+            else:
+                state = state_tp[1]
+                print(f"get state:{state} in rollback polling")
+            if rb is False:
+                if state == "rollback":
+                    rb = True
+                    await session.send(f"开始回档")
+            else:
+                if state == "running":
+                    await session.send("回档完成")
+                    r.close()
+                    return
+    else:
+        await session.send(HELP_MESSAGE)
+        r.close()
+    return 
+
+@on_command('upload', aliases=('归档',), only_to_me=True)
+@check_permission('admin')
+async def upload(session: CommandSession):
+    print("upload archive")
+    HELP_MESSAGE = "在群内输入 '/归档' 上传归档和地图到群文件"
+    ctx = session.ctx
+    msg_type = ctx['message_type']
+    if msg_type != "group":
+        msg = HELP_MESSAGE
+    else:
+        group_id = ctx['group_id']
+        r = aioredis.from_url("redis://localhost", decode_responses=True)
+        await session.send("正在处理...")
+        task_code = sha1(str(time.time()).encode()).hexdigest()
+        task = ('upload_archive', task_code)
+        task_json = json.dumps(task)
+        await r.rpush(REDIS_TASK_KEY, task_json)
+        result_key = REDIS_TASK_RESULT_KEY_PREPEND + task_code
+        max_tries = 120
+        while True:
+            result_json = await r.get(result_key)
+            if result_json is None:
+                await asyncio.sleep(2)
+                max_tries -= 1
+                if max_tries <= 0:
+                    msg = "请求超时"
+                    break
+            else:
+                await r.delete(result_key)
+                result = json.loads(result_json)
+                print(f"receive result {result}")
+                maps = result['maps']
+                file_7z = result['7z']
+                temp_dir = result['temp_dir']
+                try:
+                    await session.bot.call_action('upload_group_file', 
+                        group_id=group_id, file=file_7z, 
+                        name=file_7z.split("/")[-1],
+                    )
+                    for map in maps:
+                        await session.bot.call_action('upload_group_file', 
+                            group_id=group_id, file=map, 
+                            name=map.split("/")[-1],
+                        )
+                except ActionFailed:
+                    msg = "上传失败"
+                else:
+                    msg = "上传成功"
+                os.remove(file_7z)
+                shutil.rmtree(temp_dir)
+                break
+    await session.send(msg)
+
+@on_command('drop', aliases=('掉落',), only_to_me=True)
+@check_permission('admin')
 async def drop_player(session: CommandSession):
     print("drop player")
     HELP_MESSAGE = "输入 '/掉落 玩家KU' 来使玩家物品掉落"
@@ -518,9 +499,8 @@ async def drop_player(session: CommandSession):
         msg = HELP_MESSAGE
     await session.send(msg)
 
-
-@on_command('kick', aliases=('踢',), 
-        permission=perm.SUPERUSER, only_to_me=True)
+@on_command('kick', aliases=('踢',), only_to_me=True)
+@check_permission('admin')
 async def kick_player(session: CommandSession):
     print("kick player")
     HELP_MESSAGE = "输入 '/踢 玩家KU 秒数' 来将玩家踢出房间一段时间 默认10分钟"
@@ -549,9 +529,8 @@ async def kick_player(session: CommandSession):
         msg = HELP_MESSAGE
     await session.send(msg)
 
-
-@on_command('ban', aliases=('禁',), 
-        permission=perm.SUPERUSER, only_to_me=True)
+@on_command('ban', aliases=('禁',), only_to_me=True)
+@check_permission('admin')
 async def ban_player(session: CommandSession):
     print("ban player")
     HELP_MESSAGE = "输入 '/禁 玩家KU' 来禁止玩家在房间游戏"
@@ -572,16 +551,96 @@ async def ban_player(session: CommandSession):
     await session.send(msg)
 
 
-def puralize_ku(ku_origin: str):
-    if len(ku_origin) == 11 and ku_origin.startswith("KU_"):
-        if all(map(lambda x: x in KU_STR, ku_origin)):
-            return ku_origin
-    elif len(ku_origin) == 10 and ku_origin.startswith("KU"):
-        if all(map(lambda x: x in KU_STR, ku_origin)):
-            ku = ku_origin[:2] + "_" + ku_origin[2:]
-            return ku
-    elif len(ku_origin) == 8:
-        if all(map(lambda x: x in KU_STR, ku_origin)):
-            ku = "KU_" + ku_origin
-            return ku
-    return None
+# commands with superuser perms
+
+@on_command('regen', aliases=('重置',), only_to_me=True, 
+        permission=perm.SUPERUSER)
+async def regen(session: CommandSession):
+    print("regenerate world")
+    HELP_MESSAGE = "输入 '/重置' 来重置世界"
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    await r.delete(REDIS_SERVER_STATE)
+    await r.lpush(REDIS_CONSOLE_COMAND, f"c_regenerateworld()")
+    await session.send(f"正尝试重置世界")
+    rg = False
+    while True:
+        state_tp = await r.brpop(REDIS_SERVER_STATE, timeout=50)
+        if state_tp is None:
+            await session.send("重置超时")
+            return
+        else:
+            state = state_tp[1]
+            print(f"get state:{state} in regenerate polling")
+        if rg is False:
+            if state == "regenerate":
+                rg = True
+                await session.send(f"开始重置")
+        else:
+            if state == "running":
+                await session.send("重置完成")
+                break
+
+@on_command('edit_cluster', aliases=('服务器设置',),
+        permission=perm.SUPERUSER, only_to_me=True)
+async def edit_cluster(session: CommandSession):
+    print("edit cluster ini")
+    HELP_MESSAGE = "输入 '/服务器设置 设置名 设置值' 来修改服务器设置"
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    option = session.current_arg_text.strip()
+    if option:
+        await session.send("正在处理...")
+        task_code = sha1(str(time.time()).encode()).hexdigest()
+        opt, val = option.split(" ", max_split=1)
+        task = ('edit_cluster', {opt: val}, task_code)
+        task_json = json.dumps(task)
+        await r.rpush(REDIS_TASK_KEY, task_json)
+        result_key = REDIS_TASK_RESULT_KEY_PREPEND + task_code
+        max_tries = 10
+        while True:
+            result_json = await r.get(result_key)
+            if result_json is None:
+                await asyncio.sleep(2)
+                max_tries -= 1
+                if max_tries <= 0:
+                    msg = "请求超时"
+                    break
+            else:
+                await r.delete(result_key)
+                errors = json.loads(result_json)
+                if errors:
+                    msg = " ".join(errors) + "不是可修改选项"
+                else:
+                    msg = "成功修改"
+                break
+    else:
+        msg = HELP_MESSAGE
+    await session.send(msg)
+
+
+@on_command('test', aliases=('测试',), only_to_me=True)
+@check_permission('admin')
+async def _test(session: CommandSession):
+    msg = "empty"
+    ctx = session.ctx
+    msg_type = ctx['message_type']
+    FMT = " {user_id}: [{username}]\n"
+    # user_id =  ctx['user_id']
+    if msg_type == "group":
+        group_id = ctx['group_id']
+        rt = await session.bot.call_action('get_group_member_list', 
+                        group_id=655462253,
+                    )
+        print(f"testing: {rt}")
+        group_dict = {i['user_id']: i for i in rt}
+        msg = ""
+        for user_id in sorted(ADMINS):
+            if user_id in group_dict:
+                info = group_dict[user_id]
+                user_name = info['card'] or info['nickname']
+                msg += FMT.format(
+                    user_id=user_id, username=user_name)
+        if msg:
+            msg = "管理员:\n" + msg
+        else:
+            msg = "没有管理员"
+    await session.send(msg)
