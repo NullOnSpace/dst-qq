@@ -16,11 +16,13 @@ import multiprocessing as mp
 import redis
 
 CWD = os.path.dirname(__file__)
-sys.path.append(CWD)
+if CWD not in sys.path:
+    sys.path.append(CWD)
 from get_prefab_list import PREFABS
 from remote_command_patterns import PTNS, FIND_A_PLAYER_PATTERN as FPTN
 from get_config import STEAMCMD_DIR, INSTALL_DIR, DONTSTARVE_DIR, CLUSTER_NAME
 from edit_mod import add_server_mod_to_auto_update
+from send_qchannel_msg import send_msg_to_channel
 
 
 COMMAND = "dontstarve_dedicated_server_nullrenderer_x64"
@@ -351,6 +353,7 @@ class LineHandler:
                             return
                     self.last_chat_dt = dt
                 self.redis.zadd(REDIS_CHAT, {message: int(dt.timestamp())})
+                send_msg_to_channel(message, room='chat')
         elif content.startswith("Client authenticated"):
             match = AUTH_PATTERN.search(line)
             if match:
@@ -426,7 +429,13 @@ class LineHandler:
             update_info = True
         elif content.startswith("Resuming user"):
             update_info = True
-        elif content.startswith("[Leave Announcement]"):
+        elif content.startswith("[Leave Announcement]") or \
+                content.startswith("[Join Announcement]") or \
+                content.startswith("[Skin Announcement]") or \
+                content.startswith("[Death Announcement]") or \
+                content.startswith("[Announcement]") or \
+                content.startswith("[Resurrect Announcement]"):
+            send_msg_to_channel(content, room='chat')
             update_info = True
         elif content.startswith("Serializing world"):
             task = ('backup', 'backup_task_dummy_code')

@@ -181,3 +181,4 @@ complete_toomanyitems.py
 temp_*.py
 *.png
 *.json
+qchannel_config.py
