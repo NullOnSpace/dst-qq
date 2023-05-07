@@ -178,3 +178,6 @@ translations.json
 total_ku.json
 ku_dict.json
 complete_toomanyitems.py
+temp_*.py
+*.png
+*.json

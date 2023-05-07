@@ -76,12 +76,28 @@ def _end_read_settings(line):
 
 def read_level_settings():
     # read level setting from dst scripts
+    STRINGS = PL.LazyText("STRINGS")
+    class startlocations:
+        GetGenStartLocations = [
+            dict(text=STRINGS.UI.SANDBOXMENU.DEFAULTSTART, data="default"),
+            dict(text=STRINGS.UI.SANDBOXMENU.PLUSSTART, data="plus"),
+            dict(text=STRINGS.UI.SANDBOXMENU.DARKSTART, data="darkness"),
+            dict(text=STRINGS.UI.SANDBOXMENU.CAVESTART, data="caves"),
+        ]
+    PL.LUA_BUILTINS.update(startlocations=startlocations)
+    class tasksets:
+        GetGenTaskLists = [
+            dict(text=STRINGS.UI.CUSTOMIZATIONSCREEN.TASKSETNAMES.DEFAULT, data="default"),
+            dict(text=STRINGS.UI.CUSTOMIZATIONSCREEN.TASKSETNAMES.CLASSIC, data="classic"),
+            dict(text=STRINGS.UI.CUSTOMIZATIONSCREEN.TASKSETNAMES.CAVE_DEFAULT, data="cave_default"),
+        ]
+    PL.LUA_BUILTINS.update(tasksets=tasksets)
     lp = PL.LUAParser(global_=PL.LUA_BUILTINS)
     with zipfile.ZipFile(SCRIPT_FILE) as zip:
         content = zip.read("scripts/map/customize.lua")
     fp = io.StringIO(content.decode("utf8"))
-    lp.parse_lua(lua_file=fp, end_cond=_end_read_settings)
-    result = {}
+    lp.parse_lua(lua_file=fp, start_line=5, end_cond=_end_read_settings)
+    result = PL.LuaDict()
     for k, v in lp.global_.items():
         if k.endswith("GROUP") or k.endswith("MISC") and \
                 not k.startswith("MOD_"):
@@ -208,13 +224,41 @@ def write_to_override(override, path, prepend=""):
         fp.write(or_)
 
 
+# if __name__ == "__main__":
+#     OR = read_worldgen_override()
+#     LS = read_level_settings()
+#     import pprint
+#     pprint.pprint(LS, indent=2)
+#     pp = pprint.PrettyPrinter()
+#     with open("level_settings.txt", 'w') as fp:
+#         fp.write(pp.pformat(LS))
+#     print(OR)
+#     print(fetch_item_settings('草草'))
+
+def puralize(obj):
+    print(type(obj))
+    if type(obj) == PL.LuaDict:
+        r = {}
+        for k, v in obj.items():
+            if type(v) in (PL.LuaDict, PL.LuaList, PL.LazyText):
+                r[k] = puralize(v)
+            else:
+                r[k] = v
+    elif type(obj) == PL.LuaList:
+        r = []
+        for v in obj:
+            if type(v) in (PL.LuaDict, PL.LuaList, PL.LazyText):
+                r.append(puralize(v))
+            else:
+                r.append(v)
+    elif isinstance(obj, PL.LazyText):
+        r = obj.msgstr
+    else:
+        r = obj
+    return r
+
 if __name__ == "__main__":
-    OR = read_worldgen_override()
-    LS = read_level_settings()
-    import pprint
-    pprint.pprint(LS, indent=2)
-    pp = pprint.PrettyPrinter()
-    with open("level_settings.txt", 'w') as fp:
-        fp.write(pp.pformat(LS))
-    print(OR)
-    print(fetch_item_settings('草草'))
+    ls = read_level_settings()
+    ls_pural = puralize(ls)
+    with open('level_settings.json', 'w') as fp:
+        json.dump(ls_pural, fp, indent=2, ensure_ascii=False)

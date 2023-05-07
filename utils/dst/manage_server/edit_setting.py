@@ -42,7 +42,7 @@ def edit(change, loc=CLUSTER_INI_PATH):
     for k, v in change.items():
         if k in SETTING_MAP:
             section = SETTING_MAP[k]
-            config[section][k] = v
+            config[section][k] = v.format(old=config[section].get(k, ''))
         else:
             errors.append(k)
     with open(loc, 'w') as fp:

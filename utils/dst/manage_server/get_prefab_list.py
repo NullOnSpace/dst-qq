@@ -79,3 +79,15 @@ def get_reverse_prefabs():
     return reverse_prefabs
 
 REVERSE_PREFABS = get_reverse_prefabs()
+
+def get_prefabs_with_duplicate_names():
+    from pypinyin import pinyin, Style
+    for k in sorted(REVERSE_PREFABS.keys(), 
+            key=lambda x: [pinyin(x[0], style=Style.TONE3)]):
+        v = REVERSE_PREFABS[k]
+        if len(v) > 1:
+            print(k , v)
+
+
+if __name__ == "__main__":
+    get_prefabs_with_duplicate_names()

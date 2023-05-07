@@ -1,14 +1,18 @@
-from PIL import Image, ImageDraw, ImageFont
-
 import os
 import sys
+import xml.etree.ElementTree as ET
+
+from PIL import Image, ImageDraw, ImageFont
 
 cwd = os.path.dirname(__file__)
 sys.path.append(cwd)
 
+from get_config import INSTALL_DIR
 from get_prefab_list import PREFABS as ENT_TRANSLATION
+from parse_save import parse_map_nav
+from prefab_to_icon import MAPPING
 
-HEIGHT = WIDTH = 479*4
+ICONS_PNG_PATH = os.path.join(cwd, "minimap_atlas.png")
 
 
 fnt_imp = ImageFont.truetype(
@@ -94,7 +98,7 @@ TILE_ID_MAP = dict(
     QUAGMIRE_PARKSTONE=37,
     DECIDUOUS=30,
     ARCHIVE=45,
-    CHECKER=12
+    CHECKER=12,
 )
 
 TILE_ID_REVERSE_MAP = {v: k for k, v in TILE_ID_MAP.items()}
@@ -180,6 +184,122 @@ TILE_COLOR_MAP = dict(
 )
 
 
+def parse_xml(xml_path):
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+    t = parse_xml_ele(root)
+    return t
+
+def parse_xml_ele(xml_ele):
+    obj = {}
+    obj['tag'] = xml_ele.tag
+    obj['attrib'] = xml_ele.attrib
+    if len(xml_ele):
+        obj['children'] = children = []
+        for child in xml_ele:
+            c = parse_xml_ele(child)
+            children.append(c)
+    return obj
+
+def get_map_icon_infos():
+    # return {"png_name": {"png_name":png_name, "u1": u1...}}
+    xml_path = os.path.join(INSTALL_DIR, 'data/minimap/minimap_data.xml')
+    datas = parse_xml(xml_path)
+    icon_eles = datas['children'][1]['children']
+    icon_mapping = {}
+    for icon_ele in icon_eles:
+        attr = icon_ele['attrib']
+        name = attr['name']
+        icon_mapping[name] = attr
+    return icon_mapping
+
+def get_map_icon(icon_name, icon_infos=None):
+    if icon_infos is None:
+        icon_infos = get_map_icon_infos()
+    if icon_name in icon_infos:
+        icon_png = Image.open(ICONS_PNG_PATH)
+        height = icon_png.height
+        width = icon_png.width
+        attr = icon_infos[icon_name]
+        u1 = float(attr['u1'])*width
+        u2 = float(attr['u2'])*width
+        v2 = (1-float(attr['v1']))*height
+        v1 = (1-float(attr['v2']))*height
+        icon = icon_png.crop((u1, v1, u2, v2))
+    return icon
+
+
+def draw_icon(im, prefab, pos, icon_infos=None, icon_lib=None):
+    if icon_infos is None:
+        icon_infos = get_map_icon_infos()
+    scale = 0.25
+    anchor = (0.5, 0)
+    if prefab in MAPPING:
+        png_name = MAPPING[prefab].get('name', prefab) + '.png'
+        scale = MAPPING[prefab].get('scale', scale)
+        anchor = MAPPING[prefab].get('anchor', anchor)
+    elif prefab+".png" in icon_infos:
+        png_name = prefab + ".png"
+    else:
+        png_name = None
+    if png_name:
+        if icon_lib and png_name in icon_lib:
+            icon_im = icon_lib[png_name]
+        else:
+            icon_im = get_map_icon(png_name)
+            icon_im.thumbnail((icon_im.width*scale, icon_im.height*scale))
+            if icon_lib is not None:
+                icon_lib[png_name] = icon_im
+        anchor_x, anchor_y = anchor
+        im.alpha_composite(
+            icon_im, 
+            (int(pos[0])-int(icon_im.width*anchor_x),
+                    int(pos[1])-int(icon_im.height*(1-anchor_y))),
+        )
+        return True
+    else:
+        return False
+    
+
+def draw_icons(savedata, im=None, width=None, height=None):
+    if not (im or (width and height)):
+        raise ValueError("None of im or size")
+    if width is None:
+        width = im.width
+    else:
+        width = width*4
+    if height is None:
+        height = im.height
+    else:
+        height = height*4
+    if im is None:
+        im = Image.new("RGB", (width, height), color="#FEFEFE")
+    draw = ImageDraw.Draw(im)
+    icon_infos = get_map_icon_infos()
+    ents = savedata["ents"]
+    icon_lib = {}
+    for prefab, details in ents.items():
+        if prefab in ("wormhole", "tentacle_pillar", "tentacle_pillar_hole"):
+            _draw_wormholes(details, im, prefab)
+            continue
+        if details is None:
+            continue
+        for detail in details:
+            x = detail.get("x")
+            z = detail.get("z")
+            crd = coord2((x, z), width=width, height=height)
+            has_icon = draw_icon(im, prefab, crd, 
+                    icon_infos=icon_infos, icon_lib=icon_lib)
+            if not has_icon:
+                draw.rectangle(
+                    [(crd[0]-1, crd[1]+1), (crd[0]+1, crd[1]-1)], 
+                    outline="#010101")
+                ent_name = ENT_TRANSLATION.get(prefab, prefab)
+                draw.text(crd, 
+                        ent_name, fill="#010101", anchor="md", font=fnt_imp)
+    return im
+
+
 def draw_ents(savedata, im=None, width=None, height=None):
     if not (im or (width and height)):
         raise ValueError("None of im or size")
@@ -211,7 +331,9 @@ def draw_ents(savedata, im=None, width=None, height=None):
     return im
 
 
-def _draw_wormholes(worms, im, prefab):
+def _draw_wormholes(worms, im, prefab, icon_infos=None):
+    if icon_infos is None:
+        icon_infos = get_map_icon_infos()
     draw = ImageDraw.Draw(im)
     colors = [
         "#BDDD22",
@@ -237,9 +359,11 @@ def _draw_wormholes(worms, im, prefab):
                 bid[target] = (color, serial)
             else:
                 serial = ""
-        draw.rectangle(
-                [(crd[0]-3, crd[1]+3), (crd[0]+3, crd[1]-3)], 
-                outline=color, fill=color)
+        has_icon = draw_icon(im, prefab, crd, icon_infos=icon_infos)
+        if not has_icon:
+            draw.rectangle(
+                    [(crd[0]-3, crd[1]+3), (crd[0]+3, crd[1]-3)], 
+                    outline=color, fill=color)
         name = ENT_TRANSLATION.get(prefab, prefab)
         draw.text(crd, name+str(serial), 
                 fill="#010101", anchor="md", font=fnt_info)
@@ -291,21 +415,25 @@ def draw_tiles(tiles, im=None, width=None, height=None):
     else:
         height = height*4
     if im is None:
-        im = Image.new("RGB", (width, height), color="#FEFEFE")
+        im = Image.new("RGBA", (width, height), color="#FEFEFE")
     draw = ImageDraw.Draw(im)
     empty_color = set()
+    unknown_tiles = set()
     for idx, tile in enumerate(tiles):
         z, x = divmod(idx, width/4)
         z = z*4
         x = x*4
         rect = ((x, (height-z)-1), (x+3, height-(z+3)-1))
         tile_name = TILE_ID_REVERSE_MAP.get(tile, "unknown")
+        if tile_name == "unknown":
+            unknown_tiles.add(tile)
         color = TILE_COLOR_MAP.get(tile_name, "#030303")
         if type(color) is int:
             empty_color.add(color)
             color = '#f2ecde'
         draw.rectangle(rect, outline=color, fill=color)
-    print(empty_color)
+    print("unset tile id:", empty_color)
+    print("unknown tile id:", unknown_tiles)
     return im
 
 
@@ -342,12 +470,28 @@ def draw_roads(roads, im=None, width=None, height=None):
     return im
 
 
-def coord1(crd):  # canvas to map
-    x, z = crd
-    return x - WIDTH/2, HEIGHT/2 - z
-
-
 def coord2(crd, width, height):
     # map to canvas
     x, z = crd
     return (x + width/2), (height/2 - z)
+
+
+if __name__ == "__main__":
+    # from parse_save import parse
+    # with open(os.path.join(cwd, "temp/0000000002")) as fp:
+    #     savedata = parse(fp, ents_level=2,
+    #          extra_ents=(k for k, v in MAPPING.items() if v.get('draw', True)))
+    # tiles = parse_map_nav(savedata['map']['tiles'])
+    # height = savedata['map']['height']
+    # width = savedata['map']['width']
+    # im = draw_tiles(tiles, width=width, height=height)
+    # im = draw_icons(savedata, im=im)
+    # im.show()
+    # im.save(os.path.join(cwd, "temp/master_map.png"))
+
+
+    # im = get_map_icon('toadstool_hole.png')
+    # im.show()
+
+    for k in sorted(TILE_ID_REVERSE_MAP):
+        print(k, TILE_ID_REVERSE_MAP[k])

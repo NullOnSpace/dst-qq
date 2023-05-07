@@ -1,4 +1,6 @@
-from nonebot import on_command, CommandSession, permission as perm
+from nonebot import on_command, on_request, on_notice, \
+        NoticeSession, RequestSession, CommandSession, permission as perm
+from nonebot.command import kill_current_session
 from redis import asyncio as aioredis
 from aiocqhttp.exceptions import ActionFailed
 
@@ -36,6 +38,9 @@ REDIS_SERVER_INFO = "dst:server:info"
 REDIS_CONSOLE_COMAND = "dst:server:console:command"
 REDIS_CHAT = "dst:chat:sorted-set"
 REDIS_CHAT_LAST_FETCH = "dst:chat:last-fetch"
+REDIS_KU_MAPPING = "dst:user:ku"
+REDIS_KU_LA = "dst:user:lastaccess"
+REDIS_KU_QQ_MAPPING = "dst:qgroup:ku"
 
 STATE_DICT = {
     "idle": "空闲",
@@ -305,6 +310,9 @@ async def get_admin(session: CommandSession):
         msg = HELP
     await split_send_msg(session, msg)
 
+@on_command('kill', aliases=('闭嘴'), only_to_me=True, privileged=True)
+async def kill(session: CommandSession):
+    kill_current_session(session.event)
 
 # commands with admin perms
 
@@ -410,11 +418,11 @@ async def rollback(session: CommandSession):
                 return
             else:
                 state = state_tp[1]
-                print(f"get state:{state} in rollback polling")
+                print(f"get state: {state} in rollback polling")
             if rb is False:
                 if state == "rollback":
                     rb = True
-                    await session.send(f"开始回档")
+                    await session.send("开始回档")
             else:
                 if state == "running":
                     await session.send("回档完成")
@@ -644,3 +652,49 @@ async def _test(session: CommandSession):
         else:
             msg = "没有管理员"
     await session.send(msg)
+
+
+@on_request('group')
+async def group_add(session: RequestSession):
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    comment = session.event.comment
+    cmt = comment.split("\n答案：")[-1]
+    if cmt and cmt.strip():
+        ku = await check_nickname(cmt)
+        if ku:
+            await r.hset(REDIS_KU_QQ_MAPPING, 
+                str(session.ctx['user_id']), ku)
+            session.approve()
+    return
+
+
+async def check_nickname(nickname):
+    # check if nickname in redis ku list in 2 days
+    # return True or False
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    ku_las = await r.hgetall(REDIS_KU_LA)
+    now_ts = time.time()
+    time_diff = 2*24*3600
+    ku_in_2days = set(k for k, la in ku_las if now_ts - int(la) <= time_diff)
+    if len(nickname) <= 3:
+        for ku in ku_in_2days:
+            name = await r.hget(REDIS_KU_MAPPING, ku)
+            if name == nickname:
+                return ku
+    else:
+        for ku in ku_in_2days:
+            name = await r.hget(REDIS_KU_MAPPING, ku)
+            common = set(name.lower()) & set(nickname.lower())
+            if name.startswith(nickname) or len(common) > 0.8*len(nickname):
+                return ku
+    return False
+
+@on_notice('group_increase')
+async def group_increase(session: NoticeSession):
+    r = aioredis.from_url("redis://localhost", decode_responses=True)
+    user_id = session.ctx['user_id']
+    ku = await r.hget(REDIS_KU_QQ_MAPPING, str(user_id))
+    if ku:
+        nickname = await r.hget(REDIS_KU_MAPPING, ku)
+        if nickname:
+            await session.send(f"欢迎{nickname}")
