@@ -440,7 +440,7 @@ class LineHandler:
         elif content.startswith("Serializing world"):
             task = ('backup', 'backup_task_dummy_code')
             task_json = json.dumps(task)
-            self.redis.rpush(REDIS_TASK_KEY, task_json)
+            # self.redis.rpush(REDIS_TASK_KEY, task_json)
             update_info = True
         elif content.startswith("[server status]"):
             status_json = content[16:]
