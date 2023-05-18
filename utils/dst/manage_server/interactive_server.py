@@ -150,7 +150,7 @@ def start():
                     t_now_shut = time.time()
                     if t_now_shut - t_start_shut >= timeout_shut:
                         master_p.send_signal(SIGINT)
-                        master_p.send_signal(SIGINT)
+                        cave_p.send_signal(SIGINT)
                         MR.lpush(REDIS_SERVER_STATE, "idle")
                         logger.info("Force Interrupt")
                         stopped = True
