@@ -22,7 +22,10 @@ def send_msg_to_channel(msg, room=None, gid=None, cid=None):
         "message": msg,
     }
     url = "http://" + ADDRESS + URL_SEND_GUILD_CHANNEL_MSG
-    res = requests.get(url, params=params)
+    try:
+        res = requests.get(url, params=params)
+    except requests.exceptions.ConnectionError:
+        return False
     if res.status_code == 200:
         r = res.json()
         if r.get("status") and r['status'] == "ok":
