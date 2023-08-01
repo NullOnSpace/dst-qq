@@ -598,7 +598,7 @@ async def edit_cluster(session: CommandSession):
     if option:
         await session.send("正在处理...")
         task_code = sha1(str(time.time()).encode()).hexdigest()
-        opt, val = option.split(" ", max_split=1)
+        opt, val = option.split(" ", maxsplit=1)
         task = ('edit_cluster', {opt: val}, task_code)
         task_json = json.dumps(task)
         await r.rpush(REDIS_TASK_KEY, task_json)
